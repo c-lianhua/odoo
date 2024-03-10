@@ -10,8 +10,8 @@ var _t = core._t;
 publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
     selector: '.o_payment_form',
     events: {
-        'submit': 'async onSubmit',
-        'click #o_payment_form_pay': 'async payEvent',
+        'submit': 'onSubmit',
+        'click #o_payment_form_pay': 'payEvent',
         'click #o_payment_form_add_pm': 'addPmEvent',
         'click button[name="delete_pm"]': 'deletePmEvent',
         'click .o_payment_form_pay_icon_more': 'onClickMorePaymentIcon',
@@ -22,6 +22,12 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
      * @override
      */
     start: function () {
+        this._adaptPayButton();
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
         var self = this;
         return this._super.apply(this, arguments).then(function () {
             self.options = _.extend(self.$el.data(), self.options);
@@ -62,7 +68,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
             this.$('#payment_error').remove();
             var messageResult = '<div class="alert alert-danger mb4" id="payment_error">';
             if (title != '') {
-                messageResult = messageResult + '<b>' + _.str.escapeHTML(title) + ':</b></br>';
+                messageResult = messageResult + '<b>' + _.str.escapeHTML(title) + ':</b><br/>';
             }
             messageResult = messageResult + _.str.escapeHTML(message) + '</div>';
             $acquirerForm.append(messageResult);
@@ -129,12 +135,14 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
     },
 
     disableButton: function (button) {
+        $("body").block({overlayCSS: {backgroundColor: "#000", opacity: 0, zIndex: 1050}, message: false});
         $(button).attr('disabled', true);
         $(button).children('.fa-lock').removeClass('fa-lock');
         $(button).prepend('<span class="o_loader"><i class="fa fa-refresh fa-spin"></i>&nbsp;</span>');
     },
 
     enableButton: function (button) {
+        $('body').unblock();
         $(button).attr('disabled', false);
         $(button).children('.fa').addClass('fa-lock');
         $(button).find('span.o_loader').remove();
@@ -144,6 +152,11 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
             return e.message.data.arguments[0] + e.message.data.arguments[1];
         }
         return e.message.data.arguments[0];
+    },
+    _adaptPayButton: function () {
+        var $payButton = $("#o_payment_form_pay");
+        var disabledReasons = $payButton.data('disabled_reasons') || {};
+        $payButton.prop('disabled', _.contains(disabledReasons, true));
     },
 
     //--------------------------------------------------------------------------
@@ -259,6 +272,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
             }
             // if the user is going to pay with a form payment, then
             else if (this.isFormPaymentRadio(checked_radio)) {
+                this.disableButton(button);
                 var $tx_url = this.$el.find('input[name="prepare_tx_url"]');
                 // if there's a prepare tx url set
                 if ($tx_url.length === 1) {
@@ -275,12 +289,13 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
                             'error_url': self.options.errorUrl,
                             'callback_method': self.options.callbackMethod,
                             'order_id': self.options.orderId,
+                            'invoice_id': self.options.invoiceId,
                         },
                     }).then(function (result) {
                         if (result) {
                             // if the server sent us the html form, we create a form element
                             var newForm = document.createElement('form');
-                            newForm.setAttribute("method", "post"); // set it to post
+                            newForm.setAttribute("method", self._get_redirect_form_method());
                             newForm.setAttribute("provider", checked_radio.dataset.provider);
                             newForm.hidden = true; // hide it
                             newForm.innerHTML = result; // put the html sent by the server inside the form
@@ -298,6 +313,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
                                 _t('Server Error'),
                                 _t("We are not able to redirect you to the payment form.")
                             );
+                            self.enableButton(button);
                         }
                     }).guardedCatch(function (error) {
                         error.event.preventDefault();
@@ -306,6 +322,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
                             _t("We are not able to redirect you to the payment form.") + " " +
                                 self._parseError(error)
                         );
+                        self.enableButton(button);
                     });
                 }
                 else {
@@ -314,6 +331,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
                         _t("Cannot setup the payment"),
                         _t("We're unable to process your payment.")
                     );
+                    self.enableButton(button);
                 }
             }
             else {  // if the user is using an old payment then we just submit the form
@@ -327,7 +345,17 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
                 _t('No payment method selected'),
                 _t('Please select a payment method.')
             );
+            this.enableButton(button);
         }
+    },
+    /**
+     * Return the HTTP method to be used by the redirect form.
+     *
+     * @private
+     * @return {string} The HTTP method, "post" by default
+     */
+    _get_redirect_form_method: function () {
+        return "post";
     },
     /**
      * Called when clicking on the button to add a new payment method.
@@ -436,7 +464,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
 
                 self.displayError(
                     _t('Server error'),
-                    _t("We are not able to add your payment method at the moment.</p>") +
+                    _t("We are not able to add your payment method at the moment.") +
                         self._parseError(error)
                 );
             });
@@ -477,7 +505,7 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
         ev.stopPropagation();
         ev.preventDefault();
         var self = this;
-        var pm_id = parseInt(ev.target.value);
+        var pm_id = parseInt(ev.currentTarget.value);
 
         var tokenDelete = function () {
             self._rpc({
@@ -505,10 +533,10 @@ publicWidget.registry.PaymentForm = publicWidget.Widget.extend({
                 // if there's records linked to this payment method
                 var content = '';
                 result[pm_id].forEach(function (sub) {
-                    content += '<p><a href="' + sub.url + '" title="' + sub.description + '">' + sub.name + '</a><p/>';
+                    content += '<p><a href="' + sub.url + '" title="' + sub.description + '">' + sub.name + '</a></p>';
                 });
 
-                content = $('<div>').html(_t('<p>This card is currently linked to the following records:<p/>') + content);
+                content = $('<div>').html('<p>' + _t('This card is currently linked to the following records:') + '</p>' + content);
                 // Then we display the list of the records and ask the user if he really want to remove the payment method.
                 new Dialog(self, {
                     title: _t('Warning!'),

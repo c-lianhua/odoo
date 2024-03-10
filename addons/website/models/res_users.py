@@ -2,7 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import logging
 
-from odoo import api, fields, models, tools, _
+from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError
 from odoo.http import request
 
@@ -18,12 +18,6 @@ class ResUsers(models.Model):
         # Partial constraint, complemented by a python constraint (see below).
         ('login_key', 'unique (login, website_id)', 'You can not have two users with the same login!'),
     ]
-
-    def _has_unsplash_key_rights(self):
-        self.ensure_one()
-        if self.has_group('website.group_website_designer'):
-            return True
-        return super(ResUsers, self)._has_unsplash_key_rights()
 
     @api.constrains('login', 'website_id')
     def _check_login(self):
@@ -46,6 +40,10 @@ class ResUsers(models.Model):
     def _get_login_domain(self, login):
         website = self.env['website'].get_current_website()
         return super(ResUsers, self)._get_login_domain(login) + website.website_domain()
+
+    @api.model
+    def _get_login_order(self):
+        return 'website_id, ' + super(ResUsers, self)._get_login_order()
 
     @api.model
     def _signup_create_user(self, values):
@@ -72,10 +70,14 @@ class ResUsers(models.Model):
                 visitor_sudo = env['website.visitor']._get_visitor_from_request()
                 if visitor_sudo:
                     partner = env.user.partner_id
-                    partner_visitor = env['website.visitor'].sudo().search([('partner_id', '=', partner.id)])
+                    partner_visitor = env['website.visitor'].with_context(active_test=False).sudo().search([('partner_id', '=', partner.id)])
                     if partner_visitor and partner_visitor.id != visitor_sudo.id:
+                        # Link history to older Visitor and delete the newest
                         visitor_sudo.website_track_ids.write({'visitor_id': partner_visitor.id})
                         visitor_sudo.unlink()
+                        # If archived (most likely by the cron for inactivity reasons), reactivate the partner's visitor
+                        if not partner_visitor.active:
+                            partner_visitor.write({'active': True})
                     else:
                         vals = {
                             'partner_id': partner.id,

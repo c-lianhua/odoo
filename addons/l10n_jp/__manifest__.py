@@ -5,7 +5,7 @@
 
 {
     'name': 'Japan - Accounting',
-    'version': '2.1',
+    'version': '2.2',
     'category': 'Localization',
     'description': """
 
@@ -27,7 +27,7 @@ circumstances, you might not need to use those at all.
 
     """,
     'author': 'Quartile Limited',
-    'website': 'https://www.odoo-asia.com/',
+    'website': 'https://www.quartile.co/',
     'depends': ['account'],
     'data': [
         'data/l10n_jp_chart_data.xml',
@@ -40,4 +40,5 @@ circumstances, you might not need to use those at all.
         'data/account.fiscal.position.tax.template.csv',
         'data/account_chart_template_configure_data.xml',
     ],
+    'license': 'LGPL-3',
 }

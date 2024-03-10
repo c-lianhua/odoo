@@ -519,6 +519,22 @@ class _lt:
     def __lt__(self, other):
         raise NotImplementedError()
 
+    def __add__(self, other):
+        # Call _._get_translation() like _() does, so that we have the same number
+        # of stack frames calling _get_translation()
+        if isinstance(other, str):
+            return _._get_translation(self._source) + other
+        elif isinstance(other, _lt):
+            return _._get_translation(self._source) + _._get_translation(other._source)
+        return NotImplemented
+
+    def __radd__(self, other):
+        # Call _._get_translation() like _() does, so that we have the same number
+        # of stack frames calling _get_translation()
+        if isinstance(other, str):
+            return other + _._get_translation(self._source)
+        return NotImplemented
+
 _ = GettextAlias()
 
 
@@ -550,13 +566,31 @@ def TranslationFileReader(source, fileformat='po'):
 
 class CSVFileReader:
     def __init__(self, source):
-        self.source = pycompat.csv_reader(source, quotechar='"', delimiter=',')
-        # read the first line of the file (it contains columns titles)
-        self.fields = next(self.source)
+        _reader = codecs.getreader('utf-8')
+        self.source = csv.DictReader(_reader(source), quotechar='"', delimiter=',')
+        self.prev_code_src = ""
 
     def __iter__(self):
         for entry in self.source:
-            yield zip(self.fields, entry)
+
+            # determine <module>.<imd_name> from res_id
+            if entry["res_id"] and entry["res_id"].isnumeric():
+                # res_id is an id or line number
+                entry["res_id"] = int(entry["res_id"])
+            elif not entry.get("imd_name"):
+                # res_id is an external id and must follow <module>.<name>
+                entry["module"], entry["imd_name"] = entry["res_id"].split(".")
+                entry["res_id"] = None
+            if entry["type"] == "model" or entry["type"] == "model_terms":
+                entry["imd_model"] = entry["name"].partition(',')[0]
+
+            if entry["type"] == "code":
+                if entry["src"] == self.prev_code_src:
+                    # skip entry due to unicity constrain on code translations
+                    continue
+                self.prev_code_src = entry["src"]
+
+            yield entry
 
 class PoFileReader:
     """ Iterate over po file to return Odoo translation entries """
@@ -846,7 +880,7 @@ def _extract_translatable_qweb_terms(element, callback):
                 and not ("t-jquery" in el.attrib and "t-operation" not in el.attrib)
                 and el.get("t-translation", '').strip() != "off"):
             _push(callback, el.text, el.sourceline)
-            for att in ('title', 'alt', 'label', 'placeholder'):
+            for att in ('title', 'alt', 'label', 'placeholder', 'aria-label'):
                 if att in el.attrib:
                     _push(callback, el.attrib[att], el.sourceline)
             _extract_translatable_qweb_terms(el, callback)
@@ -878,7 +912,14 @@ def trans_generate(lang, modules, cr):
     env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
     to_translate = set()
 
-    def push_translation(module, type, name, id, source, comments=None):
+    def push_translation(module, type, name, id, source, comments=None, record_id=None):
+        """ Insert a translation that will be used in the file generation
+        In po file will create an entry
+        #: <type>:<name>:<res_id>
+        #, <comment>
+        msgid "<source>"
+        record_id is the database id of the record being translated
+        """
         # empty and one-letter terms are ignored, they probably are not meant to be
         # translated, and would be very hard to translate anyway.
         sanitized_term = (source or '').strip()
@@ -887,7 +928,7 @@ def trans_generate(lang, modules, cr):
         if not sanitized_term or len(sanitized_term) <= 1:
             return
 
-        tnx = (module, source, name, id, type, tuple(comments or ()))
+        tnx = (module, source, name, id, type, tuple(comments or ()), record_id)
         to_translate.add(tnx)
 
     def translatable_model(record):
@@ -945,7 +986,7 @@ def trans_generate(lang, modules, cr):
                     continue
                 for term in set(field.get_trans_terms(value)):
                     trans_type = 'model_terms' if callable(field.translate) else 'model'
-                    push_translation(module, trans_type, name, xml_name, term)
+                    push_translation(module, trans_type, name, xml_name, term, record_id=record.id)
 
         # End of data for ir.model.data query results
 
@@ -1028,8 +1069,12 @@ def trans_generate(lang, modules, cr):
     out = []
     # translate strings marked as to be translated
     Translation = env['ir.translation']
-    for module, source, name, id, type, comments in sorted(to_translate):
-        trans = Translation._get_source(name, type, lang, source) if lang else ""
+    for module, source, name, id, type, comments, record_id in sorted(to_translate):
+        trans = (
+            Translation._get_source(name if type != "code" else None, type, lang, source, res_id=record_id)
+            if lang
+            else ""
+        )
         out.append((module, type, name, id, source, encode(trans) or '', comments))
     return out
 

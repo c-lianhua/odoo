@@ -54,11 +54,9 @@ class PosOrder(models.Model):
 
     @api.model
     def _payment_fields(self, order, ui_paymentline):
-        payment_date = ui_paymentline['name']
-        payment_date = fields.Date.context_today(self, fields.Datetime.from_string(payment_date))
         return {
             'amount': ui_paymentline['amount'] or 0.0,
-            'payment_date': payment_date,
+            'payment_date': ui_paymentline['name'],
             'payment_method_id': ui_paymentline['payment_method_id'],
             'card_type': ui_paymentline.get('card_type'),
             'transaction_id': ui_paymentline.get('transaction_id'),
@@ -139,7 +137,6 @@ class PosOrder(models.Model):
 
         if pos_order.to_invoice and pos_order.state == 'paid':
             pos_order.action_pos_order_invoice()
-            pos_order.account_move.sudo().with_context(force_company=self.env.user.company_id.id).post()
 
         return pos_order.id
 
@@ -176,7 +173,7 @@ class PosOrder(models.Model):
                 'name': _('return'),
                 'pos_order_id': order.id,
                 'amount': -pos_order['amount_return'],
-                'payment_date': fields.Date.context_today(self),
+                'payment_date': fields.Datetime.now(),
                 'payment_method_id': cash_payment_method.id,
             }
             order.add_payment(return_payment_vals)
@@ -188,7 +185,8 @@ class PosOrder(models.Model):
             'discount': order_line.discount,
             'price_unit': order_line.price_unit,
             'name': order_line.product_id.display_name,
-            'tax_ids': [(6, 0, order_line.tax_ids.ids)],
+            'tax_ids': [(6, 0, order_line.tax_ids_after_fiscal_position.ids)],
+            'product_uom_id': order_line.product_uom_id.id,
         }
 
     def _get_pos_anglo_saxon_price_unit(self, product, partner_id, quantity):
@@ -196,7 +194,7 @@ class PosOrder(models.Model):
             .mapped('picking_id.move_lines')\
             .filtered(lambda m: m.product_id.id == product.id)\
             .sorted(lambda x: x.date)
-        price_unit = product._compute_average_price(0, quantity, moves)
+        price_unit = product.with_context(force_company=self.company_id.id)._compute_average_price(0, quantity, moves)
         return - price_unit
 
     name = fields.Char(string='Order Ref', required=True, readonly=True, copy=False, default='/')
@@ -225,7 +223,7 @@ class PosOrder(models.Model):
         readonly=True)
     config_id = fields.Many2one('pos.config', related='session_id.config_id', string="Point of Sale", readonly=False)
     currency_id = fields.Many2one('res.currency', related='config_id.currency_id', string="Currency")
-    currency_rate = fields.Float("Currency Rate", compute='_compute_currency_rate', compute_sudo=True, store=True, readonly=True, help='The rate of the currency to the currency of rate 1 applicable at the date of the order')
+    currency_rate = fields.Float("Currency Rate", compute='_compute_currency_rate', compute_sudo=True, store=True, digits=0, readonly=True, help='The rate of the currency to the currency of rate 1 applicable at the date of the order')
 
     invoice_group = fields.Boolean(related="config_id.module_account", readonly=False)
     state = fields.Selection(
@@ -244,7 +242,7 @@ class PosOrder(models.Model):
     note = fields.Text(string='Internal Notes')
     nb_print = fields.Integer(string='Number of Print', readonly=True, copy=False, default=0)
     pos_reference = fields.Char(string='Receipt Number', readonly=True, copy=False)
-    sale_journal = fields.Many2one('account.journal', related='session_id.config_id.journal_id', string='Sales Journal', store=True, readonly=True)
+    sale_journal = fields.Many2one('account.journal', related='session_id.config_id.journal_id', string='Sales Journal', store=True, readonly=True, ondelete='restrict')
     fiscal_position_id = fields.Many2one(
         comodel_name='account.fiscal.position', string='Fiscal Position',
         readonly=True,
@@ -344,11 +342,53 @@ class PosOrder(models.Model):
             'res_id': self.account_move.id,
         }
 
+    def _is_pos_order_paid(self):
+        return float_is_zero(self._get_rounded_amount(self.amount_total) - self.amount_paid, precision_rounding=self.currency_id.rounding)
+
+    def _get_rounded_amount(self, amount):
+        currency = self.currency_id
+        return currency.round(amount) if currency else amount
+
     def action_pos_order_paid(self):
-        if not float_is_zero(self.amount_total - self.amount_paid, precision_rounding=self.currency_id.rounding):
+        if not self._is_pos_order_paid():
             raise UserError(_("Order %s is not fully paid.") % self.name)
         self.write({'state': 'paid'})
         return self.create_picking()
+
+    def _get_amount_receivable(self):
+        return self.amount_total
+
+
+    def _prepare_invoice_vals(self):
+        self.ensure_one()
+        timezone = pytz.timezone(self._context.get('tz') or self.env.user.tz or 'UTC')
+        vals = {
+            'invoice_payment_ref': self.name,
+            'invoice_origin': self.name,
+            'journal_id': self.session_id.config_id.invoice_journal_id.id,
+            'type': 'out_invoice' if self.amount_total >= 0 else 'out_refund',
+            'ref': self.name,
+            'partner_id': self.partner_id.id,
+            'narration': self.note or '',
+            # considering partner's sale pricelist's currency
+            'currency_id': self.pricelist_id.currency_id.id,
+            'invoice_user_id': self.user_id.id,
+            'invoice_date': self.date_order.astimezone(timezone).date(),
+            'fiscal_position_id': self.fiscal_position_id.id,
+            'invoice_line_ids': [(0, None, self._prepare_invoice_line(line)) for line in self.lines],
+        }
+        return vals
+
+    def _create_invoice(self, move_vals):
+        self.ensure_one()
+        new_move = self.env['account.move'].sudo()\
+                        .with_context(default_type=move_vals['type'], force_company=self.company_id.id)\
+                        .create(move_vals)
+        message = _("This invoice has been created from the point of sale session: <a href=# data-oe-model=pos.order data-oe-id=%d>%s</a>") % (self.id, self.name)
+        new_move.message_post(body=message)
+
+        return new_move
+
 
     def action_pos_order_invoice(self):
         moves = self.env['account.move']
@@ -362,27 +402,11 @@ class PosOrder(models.Model):
             if not order.partner_id:
                 raise UserError(_('Please provide a partner for the sale.'))
 
-            move_vals = {
-                'invoice_payment_ref': order.name,
-                'invoice_origin': order.name,
-                'journal_id': order.session_id.config_id.invoice_journal_id.id,
-                'type': 'out_invoice' if order.amount_total >= 0 else 'out_refund',
-                'ref': order.name,
-                'partner_id': order.partner_id.id,
-                'narration': order.note or '',
-                # considering partner's sale pricelist's currency
-                'currency_id': order.pricelist_id.currency_id.id,
-                'invoice_user_id': order.user_id.id,
-                'invoice_date': fields.Date.today(),
-                'fiscal_position_id': order.fiscal_position_id.id,
-                'invoice_line_ids': [(0, None, order._prepare_invoice_line(line)) for line in order.lines],
-            }
-            new_move = moves.sudo()\
-                            .with_context(default_type=move_vals['type'], force_company=order.company_id.id)\
-                            .create(move_vals)
-            message = _("This invoice has been created from the point of sale session: <a href=# data-oe-model=pos.order data-oe-id=%d>%s</a>") % (order.id, order.name)
-            new_move.message_post(body=message)
+            move_vals = order._prepare_invoice_vals()
+            new_move = order._create_invoice(move_vals)
+
             order.write({'account_move': new_move.id, 'state': 'invoiced'})
+            new_move.sudo().with_context(force_company=order.company_id.id).post()
             moves += new_move
 
         if not moves:
@@ -460,7 +484,7 @@ class PosOrder(models.Model):
             if picking_type:
                 message = _("This transfer has been created from the point of sale session: <a href=# data-oe-model=pos.order data-oe-id=%d>%s</a>") % (order.id, order.name)
                 picking_vals = {
-                    'origin': order.name,
+                    'origin': '%s - %s' % (order.session_id.name, order.name),
                     'partner_id': address.get('delivery', False),
                     'user_id': False,
                     'date_done': order.date_order,
@@ -490,11 +514,12 @@ class PosOrder(models.Model):
                     if self.env.user.partner_id.email:
                         return_picking.message_post(body=message)
                     else:
-                        return_picking.message_post(body=message)
+                        return_picking.sudo().message_post(body=message)
 
             for line in order.lines.filtered(lambda l: l.product_id.type in ['product', 'consu'] and not float_is_zero(l.qty, precision_rounding=l.product_id.uom_id.rounding)):
                 moves |= Move.create({
                     'name': line.name,
+                    'company_id': line.company_id.id,
                     'product_uom': line.product_id.uom_id.id,
                     'picking_id': order_picking.id if line.qty >= 0 else return_picking.id,
                     'picking_type_id': picking_type.id if line.qty >= 0 else return_pick_type.id,
@@ -553,7 +578,8 @@ class PosOrder(models.Model):
                             if stock_production_lot.product_id.tracking == 'lot':
                                 qty = abs(pos_pack_lot.pos_order_line_id.qty)
                             qty_done += qty
-                            pack_lots.append({'lot_id': stock_production_lot.id, 'qty': qty})
+                            quant = stock_production_lot.quant_ids.filtered(lambda q: q.quantity > 0.0 and q.location_id.parent_path.startswith(move.location_id.parent_path))[-1:]
+                            pack_lots.append({'lot_id': stock_production_lot.id, 'quant_location_id': quant.location_id.id, 'qty': qty})
                         else:
                             has_wrong_lots = True
                 elif move.product_id.tracking == 'none' or not lots_necessary:
@@ -561,14 +587,14 @@ class PosOrder(models.Model):
                 else:
                     has_wrong_lots = True
                 for pack_lot in pack_lots:
-                    lot_id, qty = pack_lot['lot_id'], pack_lot['qty']
+                    lot_id, quant_location_id, qty = pack_lot['lot_id'], pack_lot['quant_location_id'], pack_lot['qty']
                     self.env['stock.move.line'].create({
                         'picking_id': move.picking_id.id,
                         'move_id': move.id,
                         'product_id': move.product_id.id,
                         'product_uom_id': move.product_uom.id,
                         'qty_done': qty,
-                        'location_id': move.location_id.id,
+                        'location_id': quant_location_id or move.location_id.id,
                         'location_dest_id': move.location_dest_id.id,
                         'lot_id': lot_id,
                     })
@@ -605,12 +631,16 @@ class PosOrder(models.Model):
                 'amount_paid': 0,
             })
             for line in order.lines:
+                PosOrderLineLot = self.env['pos.pack.operation.lot']
+                for pack_lot in line.pack_lot_ids:
+                    PosOrderLineLot += pack_lot.copy()
                 line.copy({
                     'name': line.name + _(' REFUND'),
                     'qty': -line.qty,
                     'order_id': refund_order.id,
                     'price_subtotal': -line.price_subtotal,
                     'price_subtotal_incl': -line.price_subtotal_incl,
+                    'pack_lot_ids': PosOrderLineLot,
                     })
             refund_orders |= refund_order
 
@@ -635,12 +665,23 @@ class PosOrder(models.Model):
         orders = self.browse(order_ids) if order_ids else self
 
         message = _("<p>Dear %s,<br/>Here is your electronic ticket for the %s. </p>") % (client['name'], name)
+
+        filename = 'Receipt-' + name + '.jpg'
+        receipt = self.env['ir.attachment'].create({
+            'name': filename,
+            'type': 'binary',
+            'datas': ticket,
+            'res_model': 'pos.order',
+            'res_id': orders[:1].id,
+            'mimetype': 'image/jpeg',
+        })
         template_data = {
             'subject': _('Receipt %s') % name,
-            'body_html': message + '<img src="data:image/jpeg;base64,%s"/>' % ticket,
+            'body_html': message,
             'author_id': self.env.user.partner_id.id,
             'email_from': self.env.company.email or self.env.user.email_formatted,
-            'email_to': client['email']
+            'email_to': client['email'],
+            'attachment_ids': [(4, receipt.id)],
         }
 
         if orders.mapped('account_move'):
@@ -650,12 +691,11 @@ class PosOrder(models.Model):
                 'name': filename,
                 'type': 'binary',
                 'datas': base64.b64encode(report[0]),
-                'store_fname': filename,
-                'res_model': 'account.move',
-                'res_id': order_ids[0],
+                'res_model': 'pos.order',
+                'res_id': orders[:1].id,
                 'mimetype': 'application/x-pdf'
             })
-            template_data['attachment_ids'] = attachment
+            template_data['attachment_ids'] += [(4, attachment.id)]
 
         mail = self.env['mail.mail'].create(template_data)
         mail.send()
@@ -709,7 +749,7 @@ class PosOrderLine(models.Model):
     price_subtotal_incl = fields.Float(string='Subtotal', digits=0,
         readonly=True, required=True)
     discount = fields.Float(string='Discount (%)', digits=0, default=0.0)
-    order_id = fields.Many2one('pos.order', string='Order Ref', ondelete='cascade', required=True)
+    order_id = fields.Many2one('pos.order', string='Order Ref', ondelete='cascade', required=True, index=True)
     tax_ids = fields.Many2many('account.tax', string='Taxes', readonly=True)
     tax_ids_after_fiscal_position = fields.Many2many('account.tax', compute='_get_tax_ids_after_fiscal_position', string='Taxes to Apply')
     pack_lot_ids = fields.One2many('pos.pack.operation.lot', 'pos_order_line_id', string='Lot/serial Number')
@@ -761,7 +801,6 @@ class PosOrderLine(models.Model):
             values['name'] = self.env['ir.sequence'].next_by_code('pos.order.line')
         return super(PosOrderLine, self).create(values)
 
-    @api.model
     def write(self, values):
         if values.get('pack_lot_line_ids'):
             for pl in values.get('pack_lot_ids'):
@@ -825,7 +864,7 @@ class PosOrderLineLot(models.Model):
     _description = "Specify product lot/serial number in pos order line"
     _rec_name = "lot_name"
 
-    pos_order_line_id = fields.Many2one('pos.order.line')
+    pos_order_line_id = fields.Many2one('pos.order.line', auto_join=True)
     order_id = fields.Many2one('pos.order', related="pos_order_line_id.order_id", readonly=False)
     lot_name = fields.Char('Lot Name')
     product_id = fields.Many2one('product.product', related='pos_order_line_id.product_id', readonly=False)
@@ -855,7 +894,7 @@ class ReportSaleDetails(models.AbstractModel):
         domain = [('state', 'in', ['paid','invoiced','done'])]
 
         if (session_ids):
-            AND([domain, [('session_id', 'in', session_ids)]])
+            domain = AND([domain, [('session_id', 'in', session_ids)]])
         else:
             if date_start:
                 date_start = fields.Datetime.from_string(date_start)
@@ -874,13 +913,13 @@ class ReportSaleDetails(models.AbstractModel):
                 # stop by default today 23:59:59
                 date_stop = date_start + timedelta(days=1, seconds=-1)
 
-            AND([domain,
+            domain = AND([domain,
                 [('date_order', '>=', fields.Datetime.to_string(date_start)),
                 ('date_order', '<=', fields.Datetime.to_string(date_stop))]
             ])
 
             if config_ids:
-                AND([domain, [('config_id', 'in', config_ids)]])
+                domain = AND([domain, [('config_id', 'in', config_ids)]])
 
         orders = self.env['pos.order'].search(domain)
 
@@ -912,18 +951,16 @@ class ReportSaleDetails(models.AbstractModel):
                     taxes.setdefault(0, {'name': _('No Taxes'), 'tax_amount':0.0, 'base_amount':0.0})
                     taxes[0]['base_amount'] += line.price_subtotal_incl
 
-        st_line_ids = self.env["account.bank.statement.line"].search([('pos_statement_id', 'in', orders.ids)]).ids
-        if st_line_ids:
+        payment_ids = self.env["pos.payment"].search([('pos_order_id', 'in', orders.ids)]).ids
+        if payment_ids:
             self.env.cr.execute("""
-                SELECT aj.name, sum(amount) total
-                FROM account_bank_statement_line AS absl,
-                     account_bank_statement AS abs,
-                     account_journal AS aj
-                WHERE absl.statement_id = abs.id
-                    AND abs.journal_id = aj.id
-                    AND absl.id IN %s
-                GROUP BY aj.name
-            """, (tuple(st_line_ids),))
+                SELECT method.name, sum(amount) total
+                FROM pos_payment AS payment,
+                     pos_payment_method AS method
+                WHERE payment.payment_method_id = method.id
+                    AND payment.id IN %s
+                GROUP BY method.name
+            """, (tuple(payment_ids),))
             payments = self.env.cr.dictfetchall()
         else:
             payments = []
@@ -948,5 +985,5 @@ class ReportSaleDetails(models.AbstractModel):
     def _get_report_values(self, docids, data=None):
         data = dict(data or {})
         configs = self.env['pos.config'].browse(data['config_ids'])
-        data.update(self.get_sale_details(data['date_start'], data['date_stop'], configs))
+        data.update(self.get_sale_details(data['date_start'], data['date_stop'], configs.ids))
         return data

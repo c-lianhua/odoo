@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import copy
+import re
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.osv import expression
@@ -62,7 +63,7 @@ class AccountReconciliation(models.AbstractModel):
                 result
             :param search_str: optional search (can be the amout, display_name,
                 partner name, move line name)
-            :param offset: offset of the search result (to display pager)
+            :param offset: useless but kept in stable to preserve api
             :param limit: number of the result to search
             :param mode: 'rp' for receivable/payable or 'other'
         """
@@ -78,30 +79,33 @@ class AccountReconciliation(models.AbstractModel):
             partner_id = st_line.partner_id.id
 
         domain = self._domain_move_lines_for_reconciliation(st_line, aml_accounts, partner_id, excluded_ids=excluded_ids, search_str=search_str, mode=mode)
-        recs_count = self.env['account.move.line'].search_count(domain)
 
         from_clause, where_clause, where_clause_params = self.env['account.move.line']._where_calc(domain).get_sql()
         query_str = '''
-            SELECT "account_move_line".id FROM {from_clause}
+            SELECT "account_move_line".id, COUNT(*) OVER() FROM {from_clause}
             {where_str}
             ORDER BY ("account_move_line".debit - "account_move_line".credit) = {amount} DESC,
                 "account_move_line".date_maturity ASC,
                 "account_move_line".id ASC
             {limit_str}
-            {offset_str}
         '''.format(
             from_clause=from_clause,
             where_str=where_clause and (" WHERE %s" % where_clause) or '',
             amount=st_line.amount,
             limit_str=limit and ' LIMIT %s' or '',
-            offset_str=offset and ' OFFSET %s' or '',
         )
-        params = where_clause_params + (limit and [limit] or []) + (offset and [offset] or [])
+        params = where_clause_params + (limit and [limit] or [])
         self.env['account.move'].flush()
         self.env['account.move.line'].flush()
         self.env['account.bank.statement'].flush()
         self._cr.execute(query_str, params)
         res = self._cr.fetchall()
+
+        # All records will have the same count value
+        try:
+            recs_count = res[0][1]
+        except IndexError:
+            recs_count = 0
 
         aml_recs = self.env['account.move.line'].browse([i[0] for i in res])
         target_currency = st_line.currency_id or st_line.journal_id.currency_id or st_line.journal_id.company_id.currency_id
@@ -128,7 +132,7 @@ class AccountReconciliation(models.AbstractModel):
         self.env['res.partner']._apply_ir_rules(ir_rules_query, 'read')
         from_clause, where_clause, where_clause_params = ir_rules_query.get_sql()
         if where_clause:
-            where_partner = ('AND %s' % where_clause).replace('res_partner', 'p3')
+            where_partner = re.sub(r"\bres_partner\b", "p3", ('AND %s' % where_clause))
             params += where_clause_params
         else:
             where_partner = ''
@@ -182,9 +186,9 @@ class AccountReconciliation(models.AbstractModel):
         reconcile_model = self.env['account.reconcile.model'].search([('rule_type', '!=', 'writeoff_button')])
 
         # Search for missing partners when opening the reconciliation widget.
-        partner_map = self._get_bank_statement_line_partners(bank_statement_lines)
-
-        matching_amls = reconcile_model._apply_rules(bank_statement_lines, excluded_ids=excluded_ids, partner_map=partner_map)
+        if bank_statement_lines:
+            partner_map = self._get_bank_statement_line_partners(bank_statement_lines)
+            matching_amls = reconcile_model._apply_rules(bank_statement_lines, excluded_ids=excluded_ids, partner_map=partner_map)
 
         # Iterate on st_lines to keep the same order in the results list.
         bank_statements_left = self.env['account.bank.statement']
@@ -253,6 +257,7 @@ class AccountReconciliation(models.AbstractModel):
 
         results.update({
             'statement_name': len(bank_statements_left) == 1 and bank_statements_left.name or False,
+            'statement_id': len(bank_statements_left) == 1 and bank_statements_left.id or False,
             'journal_id': bank_statements and bank_statements[0].journal_id.id or False,
             'notifications': []
         })
@@ -282,7 +287,7 @@ class AccountReconciliation(models.AbstractModel):
 
         domain = self._domain_move_lines_for_manual_reconciliation(account_id, partner_id, excluded_ids, search_str)
         recs_count = Account_move_line.search_count(domain)
-        lines = Account_move_line.search(domain, offset=offset, limit=limit, order="date_maturity desc, id desc")
+        lines = Account_move_line.search(domain, limit=limit, order="date_maturity desc, id desc")
         if target_currency_id:
             target_currency = Currency.browse(target_currency_id)
         else:
@@ -319,7 +324,7 @@ class AccountReconciliation(models.AbstractModel):
         # show entries that are not reconciled with other partner. Asking for a specific partner on a specific account
         # is never done.
         accounts_data = []
-        if not partner_ids:
+        if not partner_ids or not any(partner_ids):
             accounts_data = self.get_data_for_manual_reconciliation('account', account_ids)
         return {
             'customers': self.get_data_for_manual_reconciliation('partner', partner_ids, 'receivable'),
@@ -494,6 +499,7 @@ class AccountReconciliation(models.AbstractModel):
             '|', ('account_id.code', 'ilike', search_str),
             '|', ('move_id.name', 'ilike', search_str),
             '|', ('move_id.ref', 'ilike', search_str),
+            '|', ('payment_id.name', 'ilike', search_str),
             '|', ('date_maturity', 'like', parse_date(self.env, search_str)),
             '&', ('name', '!=', '/'), ('name', 'ilike', search_str)
         ]
@@ -553,17 +559,20 @@ class AccountReconciliation(models.AbstractModel):
         excluded_ids.extend(to_check_excluded)
 
         domain_reconciliation = [
-            '&', '&',
+            '&', '&', '&',
             ('statement_line_id', '=', False),
             ('account_id', 'in', aml_accounts),
-            ('payment_id', '<>', False)
+            ('payment_id', '<>', False),
+            ('balance', '!=', 0.0),
         ]
 
         # default domain matching
-        domain_matching = expression.AND([
-            [('reconciled', '=', False)],
-            [('account_id.reconcile', '=', True)]
-        ])
+        domain_matching = [
+            '&', '&',
+            ('reconciled', '=', False),
+            ('account_id.reconcile', '=', True),
+            ('balance', '!=', 0.0),
+        ]
 
         domain = expression.OR([domain_reconciliation, domain_matching])
         if partner_id:
@@ -614,13 +623,28 @@ class AccountReconciliation(models.AbstractModel):
     @api.model
     def _domain_move_lines_for_manual_reconciliation(self, account_id, partner_id=False, excluded_ids=None, search_str=False):
         """ Create domain criteria that are relevant to manual reconciliation. """
-        domain = ['&', '&', ('reconciled', '=', False), ('account_id', '=', account_id), '|', ('move_id.state', '=', 'posted'), '&', ('move_id.state', '=', 'draft'), ('move_id.journal_id.post_at', '=', 'bank_rec')]
+        domain = [
+            '&',
+                '&',
+                    ('reconciled', '=', False),
+                    ('account_id', '=', account_id),
+                '|',
+                    ('move_id.state', '=', 'posted'),
+                    '&',
+                        ('move_id.state', '=', 'draft'),
+                        ('move_id.journal_id.post_at', '=', 'bank_rec'),
+            ]
+        domain = expression.AND([domain, [('balance', '!=', 0.0)]])
         if partner_id:
             domain = expression.AND([domain, [('partner_id', '=', partner_id)]])
         if excluded_ids:
             domain = expression.AND([[('id', 'not in', excluded_ids)], domain])
         if search_str:
             str_domain = self._domain_move_lines(search_str=search_str)
+            str_domain = expression.OR([
+                str_domain,
+                [('partner_id.name', 'ilike', search_str)]
+            ])
             domain = expression.AND([domain, str_domain])
         # filter on account.move.line having the same company as the given account
         account = self.env['account.account'].browse(account_id)
@@ -795,13 +819,15 @@ class AccountReconciliation(models.AbstractModel):
             AND move_b.journal_id = journal_b.id
             AND (move_b.state = 'posted' OR (move_b.state = 'draft' AND journal_b.post_at = 'bank_rec'))
             AND a.amount_residual = -b.amount_residual
+            AND a.balance != 0.0
+            AND b.balance != 0.0
             AND NOT a.reconciled
             AND a.account_id = %s
             AND (%s IS NULL AND b.account_id = %s)
             AND (%s IS NULL AND NOT b.reconciled OR b.id = %s)
             AND (%s is NULL OR (a.partner_id = %s AND b.partner_id = %s))
-            AND a.id IN (SELECT id FROM {0})
-            AND b.id IN (SELECT id FROM {0})
+            AND a.id IN (SELECT "account_move_line".id FROM {0})
+            AND b.id IN (SELECT "account_move_line".id FROM {0})
             ORDER BY a.date desc
             LIMIT 1
             """.format(from_clause + where_str)

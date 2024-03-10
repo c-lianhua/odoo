@@ -3,15 +3,18 @@
 # 	* web_editor
 # 
 # Translators:
+# Martin Trigaux, 2019
 # Slobodan Simić <slsimic@gmail.com>, 2019
+# Uros Kalajdzic <ukalajdzic@gmail.com>, 2020
+# Dragan Vukosavljevic <dragan.vukosavljevic@gmail.com>, 2022
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-10-07 07:13+0000\n"
+"POT-Creation-Date: 2020-04-27 09:22+0000\n"
 "PO-Revision-Date: 2019-08-26 09:15+0000\n"
-"Last-Translator: Slobodan Simić <slsimic@gmail.com>, 2019\n"
+"Last-Translator: Dragan Vukosavljevic <dragan.vukosavljevic@gmail.com>, 2022\n"
 "Language-Team: Serbian (https://www.transifex.com/odoo/teams/41243/sr/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -117,7 +120,7 @@ msgstr "Радња"
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/media_dialog.js:0
 #, python-format
 msgid "Add"
-msgstr ""
+msgstr "Dodaj"
 
 #. module: web_editor
 #. openerp-web
@@ -347,16 +350,17 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/crop_dialog.js:0
 #: code:addons/web_editor/static/src/xml/ace.xml:0
+#: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "Close"
-msgstr ""
+msgstr "Zatvori"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Code"
-msgstr ""
+msgstr "Kod"
 
 #. module: web_editor
 #. openerp-web
@@ -370,7 +374,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Color"
-msgstr ""
+msgstr "Boja"
 
 #. module: web_editor
 #. openerp-web
@@ -411,12 +415,12 @@ msgstr ""
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__create_uid
 msgid "Created by"
-msgstr ""
+msgstr "Kreirano"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__create_date
 msgid "Created on"
-msgstr ""
+msgstr "Kreiran"
 
 #. module: web_editor
 #. openerp-web
@@ -431,7 +435,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Custom"
-msgstr ""
+msgstr "Prilagođeno"
 
 #. module: web_editor
 #. openerp-web
@@ -453,7 +457,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Default"
-msgstr ""
+msgstr "Podrazumevano"
 
 #. module: web_editor
 #. openerp-web
@@ -468,7 +472,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Description"
-msgstr ""
+msgstr "Опис"
 
 #. module: web_editor
 #. openerp-web
@@ -477,20 +481,20 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/dialog.js:0
 #, python-format
 msgid "Discard"
-msgstr ""
+msgstr "Poništi"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_assets__display_name
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__display_name
 msgid "Display Name"
-msgstr ""
+msgstr "Naziv za prikaz"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Document"
-msgstr ""
+msgstr "Dokument"
 
 #. module: web_editor
 #. openerp-web
@@ -526,7 +530,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Edit"
-msgstr ""
+msgstr "Uredi"
 
 #. module: web_editor
 #. openerp-web
@@ -548,7 +552,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "Filter"
-msgstr ""
+msgstr "Filter"
 
 #. module: web_editor
 #. openerp-web
@@ -615,6 +619,13 @@ msgstr ""
 
 #. module: web_editor
 #. openerp-web
+#: code:addons/web_editor/static/src/js/editor/snippets.editor.js:0
+#, python-format
+msgid "For technical reasons, this block cannot be dropped here"
+msgstr ""
+
+#. module: web_editor
+#. openerp-web
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "Format"
@@ -625,7 +636,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/crop_dialog.js:0
 #, python-format
 msgid "Free"
-msgstr ""
+msgstr "Slobodan"
 
 #. module: web_editor
 #. openerp-web
@@ -651,7 +662,7 @@ msgstr ""
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_http
 msgid "HTTP Routing"
-msgstr ""
+msgstr "HTTP rutiranje"
 
 #. module: web_editor
 #. openerp-web
@@ -700,14 +711,14 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Height"
-msgstr ""
+msgstr "Visina"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Help"
-msgstr ""
+msgstr "Pomoć"
 
 #. module: web_editor
 #. openerp-web
@@ -762,7 +773,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_assets__id
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__id
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #. module: web_editor
 #. openerp-web
@@ -805,7 +816,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Image"
-msgstr ""
+msgstr "Slika"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_ir_attachment__image_height
@@ -829,7 +840,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Image URL"
-msgstr ""
+msgstr "URL slike"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_ir_attachment__image_width
@@ -883,6 +894,12 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/snippets.editor.js:0
 #, python-format
 msgid "Install"
+msgstr "Instaliraj"
+
+#. module: web_editor
+#: code:addons/web_editor/models/ir_ui_view.py:0
+#, python-format
+msgid "Invalid field value for %s: %s"
 msgstr ""
 
 #. module: web_editor
@@ -939,17 +956,17 @@ msgstr ""
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_assets____last_update
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub____last_update
 msgid "Last Modified on"
-msgstr ""
+msgstr "Poslednja izmena dana"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "Poslednje izmenio/la"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "Poslednje ažuriranje dana"
 
 #. module: web_editor
 #. openerp-web
@@ -963,7 +980,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Link"
-msgstr ""
+msgstr "Veza"
 
 #. module: web_editor
 #. openerp-web
@@ -999,7 +1016,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Medium"
-msgstr ""
+msgstr "Posrednik"
 
 #. module: web_editor
 #. openerp-web
@@ -1007,6 +1024,13 @@ msgstr ""
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__name
 #, python-format
 msgid "Name"
+msgstr "Ime"
+
+#. module: web_editor
+#. openerp-web
+#: code:addons/web_editor/static/src/xml/snippets.xml:0
+#, python-format
+msgid "No color"
 msgstr ""
 
 #. module: web_editor
@@ -1037,21 +1061,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/snippets.xml:0
 #, python-format
 msgid "None"
-msgstr ""
+msgstr "Ništa"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Normal"
-msgstr ""
+msgstr "Uobičajen"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/snippets.options.js:0
 #, python-format
 msgid "Ok"
-msgstr ""
+msgstr "U redu"
 
 #. module: web_editor
 #. openerp-web
@@ -1094,7 +1118,7 @@ msgstr ""
 #. module: web_editor
 #: model_terms:ir.ui.view,arch_db:web_editor.snippets
 msgid "Options"
-msgstr ""
+msgstr "Opcije"
 
 #. module: web_editor
 #. openerp-web
@@ -1167,7 +1191,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Preview"
-msgstr ""
+msgstr "Pregled"
 
 #. module: web_editor
 #. openerp-web
@@ -1194,7 +1218,7 @@ msgstr ""
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_qweb
 msgid "Qweb"
-msgstr ""
+msgstr "Qweb"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_qweb_field
@@ -1304,7 +1328,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Remove"
-msgstr ""
+msgstr "Уклони"
 
 #. module: web_editor
 #. openerp-web
@@ -1332,7 +1356,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Repeat"
-msgstr ""
+msgstr "Ponovi"
 
 #. module: web_editor
 #. openerp-web
@@ -1360,7 +1384,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "Reset"
-msgstr ""
+msgstr "Resetuj"
 
 #. module: web_editor
 #. openerp-web
@@ -1462,7 +1486,7 @@ msgstr "Сачувај"
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Search"
-msgstr ""
+msgstr "Pronađi"
 
 #. module: web_editor
 #. openerp-web
@@ -1542,7 +1566,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Size"
-msgstr ""
+msgstr "Veličina"
 
 #. module: web_editor
 #. openerp-web
@@ -1551,7 +1575,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Small"
-msgstr ""
+msgstr "Malo"
 
 #. module: web_editor
 #. openerp-web
@@ -1573,7 +1597,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Style"
-msgstr ""
+msgstr "Stil"
 
 #. module: web_editor
 #. openerp-web
@@ -1594,7 +1618,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Table"
-msgstr ""
+msgstr "Sto"
 
 #. module: web_editor
 #. openerp-web
@@ -1740,7 +1764,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/backend.xml:0
 #, python-format
 msgid "Translate"
-msgstr ""
+msgstr "Prevedi"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_translation
@@ -1830,14 +1854,14 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Video"
-msgstr ""
+msgstr "Video"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Video Link"
-msgstr ""
+msgstr "Video Link"
 
 #. module: web_editor
 #. openerp-web
@@ -1863,7 +1887,7 @@ msgstr ""
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_ui_view
 msgid "View"
-msgstr ""
+msgstr "Pregled"
 
 #. module: web_editor
 #. openerp-web
@@ -1877,7 +1901,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Vimeo"
-msgstr ""
+msgstr "Vimeo"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_web_editor_converter_test_sub
@@ -1894,7 +1918,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Width"
-msgstr ""
+msgstr "Širina"
 
 #. module: web_editor
 #. openerp-web

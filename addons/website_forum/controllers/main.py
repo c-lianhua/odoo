@@ -14,7 +14,10 @@ from odoo import http, tools, _
 from odoo.addons.http_routing.models.ir_http import slug
 from odoo.addons.website.models.ir_http import sitemap_qs2dom
 from odoo.addons.website_profile.controllers.main import WebsiteProfile
+from odoo.exceptions import UserError
 from odoo.http import request
+from odoo.osv import expression
+
 
 _logger = logging.getLogger(__name__)
 
@@ -49,7 +52,11 @@ class WebsiteForum(WebsiteProfile):
 
     @http.route('/forum/new', type='json', auth="user", methods=['POST'], website=True)
     def forum_create(self, forum_name="New Forum", forum_mode="questions", add_menu=False):
-        forum_id = request.env['forum.forum'].create({'name': forum_name, 'mode': forum_mode})
+        forum_id = request.env['forum.forum'].create({
+            'name': forum_name,
+            'mode': forum_mode,
+            'website_id': request.website.id,
+        })
         if add_menu:
             request.env['website.menu'].create({
                 'name': forum_name,
@@ -106,8 +113,9 @@ class WebsiteForum(WebsiteProfile):
             # check that sorting is valid
             # retro-compatibily for V8 and google links
             try:
+                sorting = werkzeug.urls.url_unquote_plus(sorting)
                 Post._generate_order_by(sorting, None)
-            except ValueError:
+            except (UserError, ValueError):
                 sorting = False
 
         if not sorting:
@@ -127,6 +135,8 @@ class WebsiteForum(WebsiteProfile):
             url_args['search'] = search
         if filters:
             url_args['filters'] = filters
+        if my:
+            url_args['my'] = my
         pager = request.website.pager(url=url, total=question_count, page=page,
                                       step=self._post_per_page, scope=self._post_per_page,
                                       url_args=url_args)
@@ -155,12 +165,21 @@ class WebsiteForum(WebsiteProfile):
 
     @http.route('/forum/get_tags', type='http', auth="public", methods=['GET'], website=True, sitemap=False)
     def tag_read(self, query='', limit=25, **post):
+        # TODO: In master always check the forum_id domain part and add forum_id
+        #       as required method param, not in **post
+        forum_id = post.get('forum_id')
+        domain = [('name', '=ilike', (query or '') + "%")]
+        if forum_id:
+            domain = expression.AND([domain, [('forum_id', '=', int(forum_id))]])
         data = request.env['forum.tag'].search_read(
-            domain=[('name', '=ilike', (query or '') + "%")],
+            domain=domain,
             fields=['id', 'name'],
             limit=int(limit),
         )
-        return json.dumps(data)
+        return request.make_response(
+            json.dumps(data),
+            headers=[("Content-Type", "application/json")]
+        )
 
     @http.route(['/forum/<model("forum.forum"):forum>/tag', '/forum/<model("forum.forum"):forum>/tag/<string:tag_char>'], type='http', auth="public", website=True, sitemap=False)
     def tags(self, forum, tag_char=None, **post):
@@ -230,6 +249,8 @@ class WebsiteForum(WebsiteProfile):
             'filters': filters,
             'reversed': reversed,
         })
+        if (request.httprequest.referrer or "").startswith(request.httprequest.url_root):
+            values['back_button_url'] = request.httprequest.referrer
         return request.render("website_forum.post_description_full", values)
 
     @http.route('/forum/<model("forum.forum"):forum>/question/<model("forum.post"):question>/toggle_favourite', type='json', auth="user", methods=['POST'], website=True)
@@ -368,17 +389,19 @@ class WebsiteForum(WebsiteProfile):
 
     @http.route('/forum/<model("forum.forum"):forum>/post/<model("forum.post"):post>/save', type='http', auth="user", methods=['POST'], website=True)
     def post_save(self, forum, post, **kwargs):
-        if 'post_name' in kwargs and not kwargs.get('post_name').strip():
-            return request.render('http_routing.http_error', {
-                'status_code': _('Bad Request'),
-                'status_message': _('Title should not be empty.')
-            })
-        post_tags = forum._tag_to_write_vals(kwargs.get('post_tags', ''))
         vals = {
-            'tag_ids': post_tags,
-            'name': kwargs.get('post_name'),
             'content': kwargs.get('content'),
         }
+
+        if 'post_name' in kwargs:
+            if not kwargs.get('post_name').strip():
+                return request.render('http_routing.http_error', {
+                    'status_code': _('Bad Request'),
+                    'status_message': _('Title should not be empty.')
+                })
+
+            vals['name'] = kwargs.get('post_name')
+        vals['tag_ids'] = forum._tag_to_write_vals(kwargs.get('post_tags', ''))
         post.write(vals)
         question = post.parent_id if post.parent_id else post
         return werkzeug.utils.redirect("/forum/%s/question/%s" % (slug(forum), slug(question)))

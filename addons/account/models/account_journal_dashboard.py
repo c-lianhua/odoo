@@ -78,6 +78,7 @@ class account_journal(models.Model):
     # Below method is used to get data of bank and cash statemens
     def get_line_graph_datas(self):
         """Computes the data used to display the graph for bank and cash journals in the accounting dashboard"""
+        currency = self.currency_id or self.company_id.currency_id
 
         def build_graph_data(date, amount):
             #display date in locale format
@@ -117,7 +118,7 @@ class account_journal(models.Model):
             date = val['date']
             if date != today.strftime(DF):  # make sure the last point in the graph is today
                 data[:0] = [build_graph_data(date, amount)]
-            amount -= val['amount']
+            amount = currency.round(amount - val['amount'])
 
         # make sure the graph starts 1 month ago
         if date.strftime(DF) != last_month.strftime(DF):
@@ -137,7 +138,7 @@ class account_journal(models.Model):
 
     def get_bar_graph_datas(self):
         data = []
-        today = fields.Datetime.now(self)
+        today = fields.Date.today()
         data.append({'label': _('Due'), 'value':0.0, 'type': 'past'})
         day_of_week = int(format_datetime(today, 'e', locale=get_lang(self.env).code))
         first_day_of_week = today + timedelta(days=-day_of_week+1)
@@ -159,23 +160,29 @@ class account_journal(models.Model):
         (select_sql_clause, query_args) = self._get_bar_graph_select_query()
         query = ''
         start_date = (first_day_of_week + timedelta(days=-7))
+        weeks = []
         for i in range(0,6):
             if i == 0:
                 query += "("+select_sql_clause+" and invoice_date_due < '"+start_date.strftime(DF)+"')"
+                weeks.append((start_date.min, start_date))
             elif i == 5:
                 query += " UNION ALL ("+select_sql_clause+" and invoice_date_due >= '"+start_date.strftime(DF)+"')"
+                weeks.append((start_date, start_date.max))
             else:
                 next_date = start_date + timedelta(days=7)
                 query += " UNION ALL ("+select_sql_clause+" and invoice_date_due >= '"+start_date.strftime(DF)+"' and invoice_date_due < '"+next_date.strftime(DF)+"')"
+                weeks.append((start_date, next_date))
                 start_date = next_date
-
+        # Ensure results returned by postgres match the order of data list
         self.env.cr.execute(query, query_args)
         query_results = self.env.cr.dictfetchall()
         is_sample_data = True
         for index in range(0, len(query_results)):
             if query_results[index].get('aggr_date') != None:
                 is_sample_data = False
-                data[index]['value'] = query_results[index].get('total')
+                aggr_date = query_results[index]['aggr_date']
+                week_index = next(i for i in range(0, len(weeks)) if weeks[i][0] <= aggr_date < weeks[i][1])
+                data[week_index]['value'] = query_results[index].get('total')
 
         [graph_title, graph_key] = self._graph_title_and_key()
 
@@ -194,18 +201,17 @@ class account_journal(models.Model):
         the bar graph's data as its first element, and the arguments dictionary
         for it as its second.
         """
+        sign = '' if self.type == 'sale' else '-'
         return ('''
             SELECT
-                SUM((CASE WHEN move.type IN %(purchase_types)s THEN -1 else 1 END) * line.amount_residual) AS total,
+                ''' + sign + ''' + SUM(move.amount_residual_signed) AS total,
                 MIN(invoice_date_due) AS aggr_date
-            FROM account_move_line line
-            JOIN account_move move ON move.id = line.move_id
+            FROM account_move move
             WHERE move.journal_id = %(journal_id)s
             AND move.state = 'posted'
             AND move.invoice_payment_state = 'not_paid'
             AND move.type IN %(invoice_types)s
         ''', {
-            'purchase_types': tuple(self.env['account.move'].get_purchase_types(True)),
             'invoice_types': tuple(self.env['account.move'].get_invoice_types(True)),
             'journal_id': self.id
         })
@@ -266,7 +272,7 @@ class account_journal(models.Model):
                     company_id
                 FROM account_move move
                 WHERE journal_id = %s
-                AND date <= %s
+                AND invoice_date_due <= %s
                 AND state = 'posted'
                 AND invoice_payment_state = 'not_paid'
                 AND type IN ('out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt');
@@ -423,7 +429,15 @@ class account_journal(models.Model):
     def action_open_reconcile(self):
         if self.type in ['bank', 'cash']:
             # Open reconciliation view for bank statements belonging to this journal
-            bank_stmt = self.env['account.bank.statement'].search([('journal_id', 'in', self.ids)]).mapped('line_ids')
+            limit = int(self.env["ir.config_parameter"].sudo().get_param("account.reconcile.batch", 1000))
+            bank_stmt = self.env['account.bank.statement.line'].search([
+                ('journal_id', 'in', self.ids),
+                # take not reconciled lines only. See _check_lines_reconciled method
+                ('account_id', '=', False),
+                ('journal_entry_ids', '=', False),
+                ('amount', '!=', 0),
+            ], limit=limit)
+
             return {
                 'type': 'ir.actions.client',
                 'tag': 'bank_statement_reconciliation_view',
@@ -496,10 +510,13 @@ class account_journal(models.Model):
 
         domain_type_field = action['res_model'] == 'account.move.line' and 'move_id.type' or 'type' # The model can be either account.move or account.move.line
 
-        if self.type == 'sale':
-            action['domain'] = [(domain_type_field, 'in', ('out_invoice', 'out_refund', 'out_receipt'))]
-        elif self.type == 'purchase':
-            action['domain'] = [(domain_type_field, 'in', ('in_invoice', 'in_refund', 'in_receipt'))]
+        # Override the domain only if the action was not explicitly specified in order to keep the
+        # original action domain.
+        if not self._context.get('action_name'):
+            if self.type == 'sale':
+                action['domain'] = [(domain_type_field, 'in', ('out_invoice', 'out_refund', 'out_receipt'))]
+            elif self.type == 'purchase':
+                action['domain'] = [(domain_type_field, 'in', ('in_invoice', 'in_refund', 'in_receipt'))]
 
         return action
 
@@ -538,7 +555,7 @@ class account_journal(models.Model):
         [action] = self.env[model].browse(action_id).read()
         action['context'] = ctx
         if ctx.get('use_domain', False):
-            action['domain'] = ['|', ('journal_id', '=', self.id), ('journal_id', '=', False)]
+            action['domain'] = isinstance(ctx['use_domain'], list) and ctx['use_domain'] or ['|', ('journal_id', '=', self.id), ('journal_id', '=', False)]
             action['name'] += ' for journal ' + self.name
         return action
 
@@ -568,7 +585,7 @@ class account_journal(models.Model):
     #####################
     def mark_bank_setup_as_done_action(self):
         """ Marks the 'bank setup' step as done in the setup bar and in the company."""
-        self.company_id.set_onboarding_step_done('account_setup_bank_data_state')
+        self.company_id.sudo().set_onboarding_step_done('account_setup_bank_data_state')
 
     def unmark_bank_setup_as_done_action(self):
         """ Marks the 'bank setup' step as not done in the setup bar and in the company."""

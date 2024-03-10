@@ -89,9 +89,26 @@ def get_records_pager(ids, current):
     if current.id in ids and (hasattr(current, 'website_url') or hasattr(current, 'access_url')):
         attr_name = 'access_url' if hasattr(current, 'access_url') else 'website_url'
         idx = ids.index(current.id)
+        prev_record = idx != 0 and current.browse(ids[idx - 1])
+        next_record = idx < len(ids) - 1 and current.browse(ids[idx + 1])
+
+        if prev_record and prev_record[attr_name] and attr_name == "access_url":
+            prev_url = '%s?access_token=%s' % (prev_record[attr_name], prev_record._portal_ensure_token())
+        elif prev_record and prev_record[attr_name]:
+            prev_url = prev_record[attr_name]
+        else:
+            prev_url = prev_record
+
+        if next_record and next_record[attr_name] and attr_name == "access_url":
+            next_url = '%s?access_token=%s' % (next_record[attr_name], next_record._portal_ensure_token())
+        elif next_record and next_record[attr_name]:
+            next_url = next_record[attr_name]
+        else:
+            next_url = next_record
+
         return {
-            'prev_record': idx != 0 and getattr(current.browse(ids[idx - 1]), attr_name),
-            'next_record': idx < len(ids) - 1 and getattr(current.browse(ids[idx + 1]), attr_name),
+            'prev_record': prev_url,
+            'next_record': next_url,
         }
     return {}
 
@@ -141,6 +158,10 @@ class CustomerPortal(Controller):
         return groups
 
     def _prepare_portal_layout_values(self):
+        """Values for /my/* templates rendering.
+
+        Does not include the record counts.
+        """
         # get customer sales rep
         sales_user = False
         partner = request.env.user.partner_id
@@ -153,9 +174,16 @@ class CustomerPortal(Controller):
             'archive_groups': [],
         }
 
+    def _prepare_home_portal_values(self):
+        """Values for /my & /my/home routes template rendering.
+
+        Includes the record count for the displayed badges.
+        """
+        return self._prepare_portal_layout_values()
+
     @route(['/my', '/my/home'], type='http', auth="user", website=True)
     def home(self, **kw):
-        values = self._prepare_portal_layout_values()
+        values = self._prepare_home_portal_values()
         return request.render("portal.portal_my_home", values)
 
     @route(['/my/account'], type='http', auth='user', website=True)
@@ -174,10 +202,12 @@ class CustomerPortal(Controller):
             if not error:
                 values = {key: post[key] for key in self.MANDATORY_BILLING_FIELDS}
                 values.update({key: post[key] for key in self.OPTIONAL_BILLING_FIELDS if key in post})
-                values.update({'country_id': int(values.pop('country_id', 0))})
+                for field in set(['country_id', 'state_id']) & set(values.keys()):
+                    try:
+                        values[field] = int(values[field])
+                    except:
+                        values[field] = False
                 values.update({'zip': values.pop('zipcode', '')})
-                if values.get('state_id') == '':
-                    values.update({'state_id': False})
                 partner.sudo().write(values)
                 if redirect:
                     return request.redirect(redirect)
@@ -364,7 +394,7 @@ class CustomerPortal(Controller):
         if report_type not in ('html', 'pdf', 'text'):
             raise UserError(_("Invalid report type: %s") % report_type)
 
-        report_sudo = request.env.ref(report_ref).sudo()
+        report_sudo = request.env.ref(report_ref).with_user(SUPERUSER_ID)
 
         if not isinstance(report_sudo, type(request.env['ir.actions.report'])):
             raise UserError(_("%s is not the reference of a report") % report_ref)

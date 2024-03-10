@@ -7,6 +7,7 @@ from odoo import models
 from odoo.http import request
 from odoo.addons.base.models.assetsbundle import AssetsBundle
 from odoo.addons.http_routing.models.ir_http import url_for
+from odoo.osv import expression
 from odoo.addons.website.models import ir_http
 from odoo.tools import html_escape as escape
 
@@ -21,6 +22,11 @@ class AssetsBundleMultiWebsite(AssetsBundle):
         res = super(AssetsBundleMultiWebsite, self)._get_asset_url_values(id, unique, extra, name, sep, type)
         return res
 
+    def _get_assets_domain_for_already_processed_css(self, assets):
+        res = super(AssetsBundleMultiWebsite, self)._get_assets_domain_for_already_processed_css(assets)
+        current_website = self.env['website'].get_current_website(fallback=False)
+        res = expression.AND([res, current_website.website_domain()])
+        return res
 
 class QWeb(models.AbstractModel):
     """ QWeb object for rendering stuff in the website context """
@@ -62,9 +68,13 @@ class QWeb(models.AbstractModel):
         if not website.cdn_activated:
             return atts
 
-        if name and name in atts:
+        data_name = f'data-{name}'
+        if name and (name in atts or data_name in atts):
             atts = OrderedDict(atts)
-            atts[name] = website.get_cdn_url(atts[name])
+            if name in atts:
+                atts[name] = website.get_cdn_url(atts[name])
+            if data_name in atts:
+                atts[data_name] = website.get_cdn_url(atts[data_name])
         if isinstance(atts.get('style'), str) and 'background-image' in atts['style']:
             atts = OrderedDict(atts)
             atts['style'] = re_background_image.sub(lambda m: '%s%s' % (m.group(1), website.get_cdn_url(m.group(2))), atts['style'])

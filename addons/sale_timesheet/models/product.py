@@ -19,7 +19,7 @@ class ProductTemplate(models.Model):
     service_tracking = fields.Selection([
         ('no', 'Don\'t create task'),
         ('task_global_project', 'Create a task in an existing project'),
-        ('task_in_project', 'Create a task in sale order\'s project'),
+        ('task_in_project', 'Create a task in sales order\'s project'),
         ('project_only', 'Create a new project but no task'),
         ], string="Service Tracking", default="no",
         help="On Sales order confirmation, this product can generate a project and/or task. \
@@ -32,6 +32,11 @@ class ProductTemplate(models.Model):
     project_template_id = fields.Many2one(
         'project.project', 'Project Template', company_dependent=True, domain=[('billable_type', '=', 'no')], copy=True,
         help='Select a non billable project to be the skeleton of the new created project when selling the current product. Its stages and tasks will be duplicated.')
+
+    def _default_visible_expense_policy(self):
+        visibility = self.user_has_groups('project.group_project_user')
+        return visibility or super(ProductTemplate, self)._default_visible_expense_policy()
+
 
     def _compute_visible_expense_policy(self):
         super(ProductTemplate, self)._compute_visible_expense_policy()
@@ -47,7 +52,7 @@ class ProductTemplate(models.Model):
             policy = None
             if product.invoice_policy == 'delivery':
                 policy = 'delivered_manual' if product.service_type == 'manual' else 'delivered_timesheet'
-            elif product.invoice_policy == 'order' and product.service_type == 'timesheet':
+            elif product.invoice_policy == 'order' and (product.service_type == 'timesheet' or product.type == 'service'):
                 policy = 'ordered_timesheet'
             product.service_policy = policy
 
@@ -98,8 +103,18 @@ class ProductTemplate(models.Model):
             self.service_policy = 'ordered_timesheet'
         elif self.type == 'consu' and not self.invoice_policy and self.service_policy == 'ordered_timesheet':
             self.invoice_policy = 'order'
+
+        if self.type != 'service':
+            self.service_tracking = 'no'
         return res
 
+    def write(self, values):
+        if 'type' in values and values['type'] != 'service':
+            values.update({
+                'service_tracking': 'no',
+                'project_id': False
+            })
+        return super(ProductTemplate, self).write(values)
 
 class ProductProduct(models.Model):
     _inherit = 'product.product'
@@ -113,3 +128,18 @@ class ProductProduct(models.Model):
             self.project_template_id = False
         elif self.service_tracking in ['task_in_project', 'project_only']:
             self.project_id = False
+
+    @api.onchange('type')
+    def _onchange_type(self):
+        res = super(ProductProduct, self)._onchange_type()
+        if self.type != 'service':
+            self.service_tracking = 'no'
+        return res
+
+    def write(self, values):
+        if 'type' in values and values['type'] != 'service':
+            values.update({
+                'service_tracking': 'no',
+                'project_id': False
+            })
+        return super(ProductProduct, self).write(values)

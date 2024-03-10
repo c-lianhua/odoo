@@ -10,7 +10,7 @@ var blockFunction = function (ev) {
 var waitingLazy = false;
 
 /**
- * Blocks the DOM sections which explicitely require the lazy loaded JS to be
+ * Blocks the DOM sections which explicitly require the lazy loaded JS to be
  * working (those sections should be marked with the 'o_wait_lazy_js' class).
  *
  * @see stopWaitingLazy
@@ -21,11 +21,15 @@ function waitLazy() {
     }
     waitingLazy = true;
 
-    document.querySelectorAll('.o_wait_lazy_js').forEach(function (element) {
+    var lazyEls = document.querySelectorAll('.o_wait_lazy_js');
+    for (var i = 0; i < lazyEls.length; i++) {
+        var element = lazyEls[i];
         blockEvents.forEach(function (evType) {
             element.addEventListener(evType, blockFunction);
         });
-    });
+    }
+
+    document.body.classList.add('o_lazy_js_waiting');
 }
 /**
  * Unblocks the DOM sections blocked by @see waitLazy and removes the related
@@ -37,12 +41,16 @@ function stopWaitingLazy() {
     }
     waitingLazy = false;
 
-    document.querySelectorAll('.o_wait_lazy_js').forEach(function (element) {
+    var lazyEls = document.querySelectorAll('.o_wait_lazy_js');
+    for (var i = 0; i < lazyEls.length; i++) {
+        var element = lazyEls[i];
         blockEvents.forEach(function (evType) {
             element.removeEventListener(evType, blockFunction);
         });
         element.classList.remove('o_wait_lazy_js');
-    });
+    }
+
+    document.body.classList.remove('o_lazy_js_waiting');
 }
 
 // Start waiting for lazy loading as soon as the DOM is available

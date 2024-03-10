@@ -6,6 +6,7 @@ var ajax = require('web.ajax');
 var core = require('web.core');
 var Dialog = require('web.Dialog');
 var field_utils = require('web.field_utils');
+var pyUtils = require('web.py_utils');
 var session = require('web.session');
 var time = require('web.time');
 var web_client = require('web.web_client');
@@ -13,7 +14,6 @@ var web_client = require('web.web_client');
 var _t = core._t;
 var QWeb = core.qweb;
 
-var DATE_FORMAT = time.getLangDateFormat();
 var COLORS = ["#1f77b4", "#aec7e8"];
 var FORMAT_OPTIONS = {
     // allow to decide if utils.human_number should be used
@@ -44,6 +44,7 @@ var Dashboard = AbstractAction.extend({
     init: function(parent, context) {
         this._super(parent, context);
 
+        this.DATE_FORMAT = time.getLangDateFormat();
         this.date_range = 'week';  // possible values : 'week', 'month', year'
         this.date_from = moment.utc().subtract(1, 'week');
         this.date_to = moment.utc();
@@ -136,7 +137,7 @@ var Dashboard = AbstractAction.extend({
     on_go_to_website: function (ev) {
         ev.preventDefault();
         var website = _.findWhere(this.websites, {selected: true});
-        window.location.href = $.param.querystring(website.domain + '/', {'fw': website.id});
+        window.location.href = `/website/force/${website.id}`;
     },
 
     on_save_ga_client_id: function(ga_client_id, ga_analytics_key) {
@@ -214,7 +215,7 @@ var Dashboard = AbstractAction.extend({
                     xAxes: [{
                         ticks: {
                             callback: function (moment) {
-                                return moment.format(DATE_FORMAT);
+                                return moment.format(self.DATE_FORMAT);
                             },
                         }
                     }],
@@ -237,7 +238,7 @@ var Dashboard = AbstractAction.extend({
                             var date = tooltipItem.datasetIndex === 0 ?
                                         moment :
                                         moment.subtract(1, self.date_range);
-                            return date.format(DATE_FORMAT) + ': ' + self.formatValue(tooltipItem.yLabel);
+                            return date.format(self.DATE_FORMAT) + ': ' + self.formatValue(tooltipItem.yLabel);
                         },
                         labelColor: function (tooltipItem, chart) {
                             var dataset = chart.data.datasets[tooltipItem.datasetIndex];
@@ -353,6 +354,7 @@ var Dashboard = AbstractAction.extend({
 
     on_dashboard_action: function (ev) {
         ev.preventDefault();
+        var self = this
         var $action = $(ev.currentTarget);
         var additional_context = {};
         if (this.date_range === 'week') {
@@ -362,9 +364,18 @@ var Dashboard = AbstractAction.extend({
         } else if (this.date_range === 'year') {
             additional_context = {search_default_year: true};
         }
-        this.do_action($action.attr('name'), {
-            additional_context: additional_context,
-            on_reverse_breadcrumb: this.on_reverse_breadcrumb
+        this._rpc({
+            route: '/web/action/load',
+            params: {
+                'action_id': $action.attr('name'),
+            },
+        })
+        .then(function (action) {
+            action.domain = pyUtils.assembleDomains([action.domain, `[('website_id', '=', ${self.website_id})]`]);
+            return self.do_action(action, {
+                'additional_context': additional_context,
+                'on_reverse_breadcrumb': self.on_reverse_breadcrumb
+            });
         });
     },
 

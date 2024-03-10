@@ -12,7 +12,7 @@ class StockInventory(models.Model):
         help="Date at which the accounting entries will be created"
              " in case of automated inventory valuation."
              " If empty, the inventory date will be used.")
-    has_account_moves = fields.Boolean(compute='_compute_has_account_moves')
+    has_account_moves = fields.Boolean(compute='_compute_has_account_moves', compute_sudo=True)
 
     def _compute_has_account_moves(self):
         for inventory in self:
@@ -35,10 +35,11 @@ class StockInventory(models.Model):
         return action_data
 
     def post_inventory(self):
+        res = True
         acc_inventories = self.filtered(lambda inventory: inventory.accounting_date)
         for inventory in acc_inventories:
-            super(StockInventory, inventory.with_context(force_period_date=inventory.accounting_date)).post_inventory()
+            res = super(StockInventory, inventory.with_context(force_period_date=inventory.accounting_date)).post_inventory()
         other_inventories = self - acc_inventories
         if other_inventories:
-            super(StockInventory, other_inventories).post_inventory()
-
+            res = super(StockInventory, other_inventories).post_inventory()
+        return res

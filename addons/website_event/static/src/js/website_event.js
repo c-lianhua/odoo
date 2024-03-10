@@ -21,10 +21,10 @@ var EventRegistrationForm = Widget.extend({
         var res = this._super.apply(this.arguments).then(function () {
             $('#registration_form .a-submit')
                 .off('click')
-                .removeClass('a-submit')
                 .click(function (ev) {
                     self.on_click(ev);
-                });
+                })
+                .prop('disabled', false);
         });
         return res;
     },
@@ -89,8 +89,16 @@ publicWidget.registry.EventRegistrationFormInstance = publicWidget.Widget.extend
      */
     start: function () {
         var def = this._super.apply(this, arguments);
-        var instance = new EventRegistrationForm(this);
-        return Promise.all([def, instance.attachTo(this.$el)]);
+        this.instance = new EventRegistrationForm(this);
+        return Promise.all([def, this.instance.attachTo(this.$el)]);
+    },
+    /**
+     * @override
+     */
+    destroy: function () {
+        this.instance.setElement(null);
+        this._super.apply(this, arguments);
+        this.instance.setElement(this.$el);
     },
 });
 

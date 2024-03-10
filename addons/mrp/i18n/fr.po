@@ -16,28 +16,33 @@
 # Olivier ANDRE <frsw194@gmail.com>, 2019
 # a270031086f2a0d3514bc0cb507b48f6, 2019
 # Celia Tydgat <cty@odoo.com>, 2019
-# Cécile Collart <cco@odoo.com>, 2019
 # gdp Odoo <gdp@odoo.com>, 2019
 # 6534c450c77b2549e41c52e2051f5839, 2019
 # Guilhaume Bordiau <github@guilhaume.fr>, 2019
 # Eloïse Stilmant <est@odoo.com>, 2019
 # Léonie Bouchat <lbo@odoo.com>, 2019
 # Martin Trigaux, 2019
-# Oriane Malburny <oma@odoo.com>, 2019
+# omaodoo <oma@odoo.com>, 2019
+# Antoine Gilard <ang@odoo.com>, 2020
+# Yann Papouin <ypa@decgroupe.com>, 2021
+# SAKodoo <sak@odoo.com>, 2021
+# RHTodoo, 2021
+# Cécile Collart <cco@odoo.com>, 2022
+# Jolien De Paepe, 2022
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-10-18 09:46+0000\n"
+"POT-Creation-Date: 2019-12-05 12:32+0000\n"
 "PO-Revision-Date: 2019-08-26 09:12+0000\n"
-"Last-Translator: Oriane Malburny <oma@odoo.com>, 2019\n"
+"Last-Translator: Jolien De Paepe, 2022\n"
 "Language-Team: French (https://www.transifex.com/odoo/teams/41243/fr/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Language: fr\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"Plural-Forms: nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;\n"
 
 #. module: mrp
 #: model:ir.model.fields,help:mrp.field_mrp_production__state
@@ -374,6 +379,15 @@ msgid "A Manufacturing Order is already done or cancelled."
 msgstr "Un ordre de fabrication est déjà fait ou annulé."
 
 #. module: mrp
+#: code:addons/mrp/models/stock_warehouse.py:0
+#, python-format
+msgid ""
+"A product with a kit-type bill of materials can not have a reordering rule."
+msgstr ""
+"Un article avec une nomenclature de type kit ne peut pas avoir de règle de "
+"réapprovisionnement."
+
+#. module: mrp
 #: code:addons/mrp/models/mrp_workcenter.py:0
 #, python-format
 msgid "A workcenter cannot be an alternative of itself"
@@ -549,11 +563,26 @@ msgid "Approve"
 msgstr "Approuver"
 
 #. module: mrp
+#: model_terms:ir.ui.view,arch_db:mrp.mrp_bom_form_view
+#: model_terms:ir.ui.view,arch_db:mrp.mrp_routing_form_view
 #: model_terms:ir.ui.view,arch_db:mrp.mrp_routing_search_view
+#: model_terms:ir.ui.view,arch_db:mrp.mrp_workcenter_view
 #: model_terms:ir.ui.view,arch_db:mrp.view_mrp_bom_filter
 #: model_terms:ir.ui.view,arch_db:mrp.view_mrp_workcenter_search
 msgid "Archived"
 msgstr "Archivé"
+
+#. module: mrp
+#: code:addons/mrp/models/mrp_production.py:0
+#, python-format
+msgid ""
+"At least one work order has a quantity produced lower than the quantity "
+"produced in the manufacturing order. You must complete the work orders "
+"before posting the inventory."
+msgstr ""
+"Au moins un ordre de travail a une quantité produite inférieure à la "
+"quantité produite dans l'ordre de fabrication. Vous devez compléter les "
+"ordres de travail avant d'enregistrer l'inventaire."
 
 #. module: mrp
 #: model_terms:ir.ui.view,arch_db:mrp.mrp_bom_form_view
@@ -644,7 +673,6 @@ msgid "BOM lines of the referred bom"
 msgstr "Lignes de nomenclature de la nomenclature de référence"
 
 #. module: mrp
-#: model_terms:ir.ui.view,arch_db:mrp.label_production_view_pdf
 #: model_terms:ir.ui.view,arch_db:mrp.report_mrporder
 msgid "Barcode"
 msgstr "Code-barres"
@@ -1866,7 +1894,7 @@ msgstr "Quantité insuffisante"
 #. module: mrp
 #: model:ir.actions.act_window,name:mrp.action_mrp_production_moves
 msgid "Inventory Moves"
-msgstr "Mouvement de stock"
+msgstr "Mouvements d'articles"
 
 #. module: mrp
 #: model:ir.model.fields,help:mrp.field_mrp_workorder__move_line_ids
@@ -1919,6 +1947,17 @@ msgstr "L'utilisateur actuel travaille-t-il ?"
 #, python-format
 msgid "It has already been unblocked."
 msgstr "Ceci a déjà été débloqué. "
+
+#. module: mrp
+#: code:addons/mrp/models/mrp_workorder.py:0
+#, python-format
+msgid ""
+"It is not possible to unplan one single Work Order. You should unplan the "
+"Manufacturing Order instead in order to unplan all the linked operations."
+msgstr ""
+"Il n'est pas possible de déplanifier un seul Ordre de Travail. Vous devez "
+"plutôt déplanifier l'ordre de fabrication afin de déplanifier toutes les "
+"opérations liées."
 
 #. module: mrp
 #: model:ir.model.fields.selection,name:mrp.selection__mrp_bom__type__phantom
@@ -3241,7 +3280,6 @@ msgstr "Quantité à traiter"
 #. module: mrp
 #. openerp-web
 #: code:addons/mrp/static/src/xml/mrp.xml:0
-#: model_terms:ir.ui.view,arch_db:mrp.label_production_view_pdf
 #, python-format
 msgid "Quantity:"
 msgstr "Quantité :"
@@ -3613,8 +3651,8 @@ msgid ""
 "Some components have been consumed for a lot/serial number that has not been produced. Unlock the MO and click on the components lines to correct it.\n"
 "List of the components:\n"
 msgstr ""
-"Certains composants ont été consommés pour un lot/numéro de série qui n'a pas été produit. Déverouillez l'OF et cloquer sur les lignes de composants pour les corriger.\n"
-"Liste des composants:\n"
+"Certains composants ont été consommés pour un lot/numéro de série qui n'a pas été produit. Déverouillez l'OF et cliquezsur les lignes de composants pour les corriger.\n"
+"Liste des composantes:\n"
 
 #. module: mrp
 #: code:addons/mrp/models/mrp_unbuild.py:0
@@ -3994,6 +4032,18 @@ msgstr ""
 "afin de pouvoir sauver l'ordre de travail."
 
 #. module: mrp
+#: code:addons/mrp/models/mrp_bom.py:0
+#, python-format
+msgid ""
+"The product has already been used at least once, editing its structure may "
+"lead to undesirable behaviours. You should rather archive the product and "
+"create a new one with a new bill of materials."
+msgstr ""
+"Le produit a déjà été utilisé au moins une fois, modifier sa structure peut "
+"entraîner des comportements indésirables. Vous devriez plutôt archiver le "
+"produit et en créer un nouveau avec une nouvelle nomenclature."
+
+#. module: mrp
 #: code:addons/mrp/wizard/mrp_product_produce.py:0
 #, python-format
 msgid "The production order for '%s' has no quantity specified."
@@ -4001,6 +4051,8 @@ msgstr "L'ordre de production pour '%s' n'a pas de quantité spécifiée."
 
 #. module: mrp
 #: model:ir.model.constraint,message:mrp.constraint_mrp_production_qty_positive
+#: code:addons/mrp/models/mrp_bom.py:0
+#, python-format
 msgid "The quantity to produce must be positive!"
 msgstr "La quantité à produire doit être positive !"
 
@@ -4024,6 +4076,16 @@ msgstr ""
 "La gamme contient tous les postes de charge utilisés et les durées "
 "d'utilisation. Des ordres de travail seront ainsi créés par la suite, ce qui"
 " modifiera l'exécution de l'ordre de fabrication."
+
+#. module: mrp
+#: code:addons/mrp/models/mrp_unbuild.py:0
+#, python-format
+msgid ""
+"The selected serial number does not correspond to the one used in the "
+"manufacturing order, please select another one."
+msgstr ""
+"Le numéro de série sélectionné ne correspond pas à celui utilisé dans "
+"l'ordre de fabrication, veuillez en sélectionner un autre."
 
 #. module: mrp
 #: code:addons/mrp/models/mrp_bom.py:0
@@ -4943,6 +5005,16 @@ msgstr ""
 #: code:addons/mrp/models/mrp_bom.py:0
 #, python-format
 msgid ""
+"You can not create a kit-type bill of materials for products that have at "
+"least one reordering rule."
+msgstr ""
+"Vous ne pouvez pas créer une nomenclature de type kit pour les produits qui "
+"ont au moins une règle de réapprovisionnement."
+
+#. module: mrp
+#: code:addons/mrp/models/mrp_bom.py:0
+#, python-format
+msgid ""
 "You can not delete a Bill of Material with running manufacturing orders.\n"
 "Please close or cancel it first."
 msgstr ""
@@ -4982,7 +5054,7 @@ msgstr ""
 #: code:addons/mrp/models/mrp_bom.py:0
 #, python-format
 msgid "You cannot create a new Bill of Material from here."
-msgstr ""
+msgstr "Vous ne pouvez pas créer une nouvelle nomenclature d'ici."
 
 #. module: mrp
 #: code:addons/mrp/models/mrp_unbuild.py:0
@@ -5057,6 +5129,16 @@ msgstr ""
 #, python-format
 msgid "You have to produce at least one %s."
 msgstr "Vous devez produire au moins un %s."
+
+#. module: mrp
+#: code:addons/mrp/models/mrp_production.py:0
+#, python-format
+msgid ""
+"You must indicate a non-zero amount consumed for at least one of your "
+"components"
+msgstr ""
+"Vous devez indiquer une quantité consommée différente de zéro pour au moins "
+"un de vos composants."
 
 #. module: mrp
 #: code:addons/mrp/models/mrp_workorder.py:0

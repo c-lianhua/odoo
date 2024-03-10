@@ -261,6 +261,53 @@ class TestStockValuationStandard(TestStockValuationCommon):
         self.assertEqual(self.product1.value_svl, 0)
         self.assertEqual(self.product1.quantity_svl, 0)
 
+    def test_empty_stock_move_valorisation(self):
+        product1 = self.env['product.product'].create({
+            'name': 'p1',
+            'type': 'product',
+        })
+        product2 = self.env['product.product'].create({
+            'name': 'p2',
+            'type': 'product',
+        })
+        picking = self.env['stock.picking'].create({
+            'picking_type_id': self.picking_type_in.id,
+            'location_id': self.supplier_location.id,
+            'location_dest_id': self.stock_location.id,
+        })
+        for product in (product1, product2):
+            product.unit_cost = 10
+            in_move = self.env['stock.move'].create({
+                'name': 'in %s units @ %s per unit' % (2, str(10)),
+                'product_id': product.id,
+                'location_id': self.supplier_location.id,
+                'location_dest_id': self.stock_location.id,
+                'product_uom': self.uom_unit.id,
+                'product_uom_qty': 2,
+                'price_unit': 10,
+                'picking_type_id': self.picking_type_in.id,
+                'picking_id': picking.id
+            })
+
+        picking.action_confirm()
+        # set quantity done only on one move
+        in_move.move_line_ids.qty_done = 2
+        res_dict = picking.button_validate()
+        wizard = self.env[(res_dict.get('res_model'))].browse(res_dict.get('res_id'))
+        res_dict_for_back_order = wizard.process()
+
+        self.assertTrue(product2.stock_valuation_layer_ids)
+        self.assertFalse(product1.stock_valuation_layer_ids)
+
+    def test_currency_precision_and_standard_svl_value(self):
+        self.env.company.currency_id.rounding = 1
+        self.product1.standard_price = 3
+
+        self._make_in_move(self.product1, 0.5)
+        self._make_out_move(self.product1, 0.5)
+
+        self.assertEqual(self.product1.value_svl, 0.0)
+
 
 class TestStockValuationAVCO(TestStockValuationCommon):
     def setUp(self):
@@ -382,6 +429,17 @@ class TestStockValuationAVCO(TestStockValuationCommon):
         self.assertEqual(self.product1.value_svl, 0)
         self.assertEqual(self.product1.quantity_svl, 0)
 
+    def test_negative_3(self):
+        self.product1.product_tmpl_id.categ_id.property_valuation = 'manual_periodic'
+        move1 = self._make_out_move(self.product1, 2, force_assign=True)
+        self.assertEqual(move1.stock_valuation_layer_ids.value, 0)
+        move2 = self._make_in_move(self.product1, 20, unit_cost=3.33)
+        self.assertEqual(move1.stock_valuation_layer_ids[1].value, -6.66)
+
+        self.assertEqual(self.product1.standard_price, 3.33)
+        self.assertEqual(self.product1.value_svl, 59.94)
+        self.assertEqual(self.product1.quantity_svl, 18)
+
     def test_return_receipt_1(self):
         move1 = self._make_in_move(self.product1, 1, unit_cost=10, create_picking=True)
         move2 = self._make_in_move(self.product1, 1, unit_cost=20)
@@ -435,6 +493,46 @@ class TestStockValuationAVCO(TestStockValuationCommon):
         self.assertEqual(self.product1.value_svl, 30)
         self.assertEqual(self.product1.quantity_svl, 2)
         self.assertEqual(self.product1.standard_price, 15)
+
+    def test_rounding_slv_1(self):
+        move1 = self._make_in_move(self.product1, 1, unit_cost=1.00)
+        move2 = self._make_in_move(self.product1, 1, unit_cost=1.00)
+        move3 = self._make_in_move(self.product1, 1, unit_cost=1.01)
+
+        self.assertAlmostEqual(self.product1.value_svl, 3.01)
+
+        move_out = self._make_out_move(self.product1, 3, create_picking=True)
+
+        self.assertIn('Rounding Adjustment: -0.01', move_out.stock_valuation_layer_ids.description)
+
+        self.assertEqual(self.product1.value_svl, 0)
+        self.assertEqual(self.product1.quantity_svl, 0)
+        self.assertEqual(self.product1.standard_price, 1.00)
+
+    def test_rounding_slv_2(self):
+        self._make_in_move(self.product1, 1, unit_cost=1.02)
+        self._make_in_move(self.product1, 1, unit_cost=1.00)
+        self._make_in_move(self.product1, 1, unit_cost=1.00)
+
+        self.assertAlmostEqual(self.product1.value_svl, 3.02)
+
+        move_out = self._make_out_move(self.product1, 3, create_picking=True)
+
+        self.assertIn('Rounding Adjustment: +0.01', move_out.stock_valuation_layer_ids.description)
+
+        self.assertEqual(self.product1.value_svl, 0)
+        self.assertEqual(self.product1.quantity_svl, 0)
+        self.assertEqual(self.product1.standard_price, 1.01)
+
+    def test_return_delivery_2(self):
+        self.product1.write({"standard_price": 1})
+        move1 = self._make_out_move(self.product1, 10, create_picking=True, force_assign=True)
+        move2 = self._make_in_move(self.product1, 10, unit_cost=2)
+        move3 = self._make_return(move1, 10)
+
+        self.assertEqual(self.product1.value_svl, 20)
+        self.assertEqual(self.product1.quantity_svl, 10)
+        self.assertEqual(self.product1.standard_price, 2)
 
 
 class TestStockValuationFIFO(TestStockValuationCommon):
@@ -595,6 +693,33 @@ class TestStockValuationFIFO(TestStockValuationCommon):
         self.assertEqual(self.product1.value_svl, 30)
         self.assertEqual(self.product1.quantity_svl, 2)
         self.assertEqual(orig_standard_price, self.product1.standard_price)
+
+    def test_return_delivery_2(self):
+        self._make_in_move(self.product1, 1, unit_cost=10)
+        self._make_in_move(self.product1, 1, unit_cost=0)
+
+        self._make_out_move(self.product1, 1)
+        out_move02 = self._make_out_move(self.product1, 1, create_picking=True)
+
+        returned = self._make_return(out_move02, 1)
+        self.assertEqual(returned.stock_valuation_layer_ids.value, 0)
+
+    def test_return_delivery_3(self):
+        self.product1.write({"standard_price": 1})
+        move1 = self._make_out_move(self.product1, 10, create_picking=True, force_assign=True)
+        move2 = self._make_in_move(self.product1, 10, unit_cost=2)
+        move3 = self._make_return(move1, 10)
+
+        self.assertEqual(self.product1.value_svl, 20)
+        self.assertEqual(self.product1.quantity_svl, 10)
+
+    def test_currency_precision_and_fifo_svl_value(self):
+        self.env.company.currency_id.rounding = 1.0
+
+        self._make_in_move(self.product1, 0.5, unit_cost=3)
+        self._make_out_move(self.product1, 0.5)
+
+        self.assertEqual(self.product1.value_svl, 0.0)
 
 
 class TestStockValuationChangeCostMethod(TestStockValuationCommon):
@@ -768,7 +893,10 @@ class TestStockValuationChangeValuation(TestStockValuationCommon):
             'property_stock_journal': self.stock_journal.id,
         })
 
-        self.product1.categ_id = cat2
+        # Try to change the product category with a `default_type` key in the context and
+        # check it doesn't break the account move generation.
+        self.product1.with_context(default_type='product').categ_id = cat2
+        self.assertEqual(self.product1.categ_id, cat2)
 
         self.assertEqual(self.product1.value_svl, 100)
         self.assertEqual(self.product1.quantity_svl, 10)
@@ -817,3 +945,55 @@ class TestStockValuationChangeValuation(TestStockValuationCommon):
         self.assertEqual(len(self.product1.stock_valuation_layer_ids.mapped('account_move_id')), 2)
         self.assertEqual(len(self.product1.stock_valuation_layer_ids), 3)
 
+@tagged('post_install', '-at_install')
+class TestAngloSaxoAccounting(TestStockValuationCommon):
+    @classmethod
+    def setUpClass(cls):
+        super(TestAngloSaxoAccounting, cls).setUpClass()
+        cls.env.company.anglo_saxon_accounting = True
+        cls.stock_input_account, cls.stock_output_account, cls.stock_valuation_account, cls.expense_account, cls.stock_journal = _create_accounting_data(cls.env)
+        cls.product1.write({
+            'property_account_expense_id': cls.expense_account.id,
+        })
+        cls.product1.categ_id.write({
+            'property_valuation': 'real_time',
+            'property_stock_account_input_categ_id': cls.stock_input_account.id,
+            'property_stock_account_output_categ_id': cls.stock_output_account.id,
+            'property_stock_valuation_account_id': cls.stock_valuation_account.id,
+            'property_stock_journal': cls.stock_journal.id,
+        })
+
+    def test_avco_and_credit_note(self):
+        """
+        When reversing an invoice that contains some anglo-saxo AML, the new anglo-saxo AML should have the same value
+        """
+        self.product1.categ_id.property_cost_method = 'average'
+
+        self._make_in_move(self.product1, 2, unit_cost=10)
+
+        invoice_form = Form(self.env['account.move'].with_context(default_type='out_invoice'))
+        invoice_form.partner_id = self.env['res.partner'].create({'name': 'Super Client'})
+        with invoice_form.invoice_line_ids.new() as invoice_line_form:
+            invoice_line_form.product_id = self.product1
+            invoice_line_form.quantity = 2
+            invoice_line_form.price_unit = 25
+        invoice = invoice_form.save()
+        invoice.action_post()
+
+        self._make_in_move(self.product1, 2, unit_cost=20)
+        self.assertEqual(self.product1.standard_price, 15)
+
+        refund_wizard = self.env['account.move.reversal'].with_context(active_model="account.move", active_ids=invoice.ids).create({
+            'refund_method': 'refund',
+        })
+        action = refund_wizard.reverse_moves()
+        reverse_invoice = self.env['account.move'].browse(action['res_id'])
+        with Form(reverse_invoice) as reverse_invoice_form:
+            with reverse_invoice_form.invoice_line_ids.edit(0) as line:
+                line.quantity = 1
+        reverse_invoice.post()
+
+        anglo_lines = reverse_invoice.line_ids.filtered(lambda l: l.is_anglo_saxon_line)
+        self.assertEqual(len(anglo_lines), 2)
+        self.assertEqual(abs(anglo_lines[0].balance), 10)
+        self.assertEqual(abs(anglo_lines[1].balance), 10)

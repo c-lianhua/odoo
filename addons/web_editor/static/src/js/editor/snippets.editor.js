@@ -181,7 +181,9 @@ var SnippetEditor = Widget.extend({
             top: offset.top,
         });
         this.$('.o_handles').css('height', this.$target.outerHeight());
-        this.$el.toggleClass('o_top_cover', offset.top < this.$editable.offset().top);
+
+        const editableOffsetTop = this.$editable.offset().top - manipulatorOffset.top;
+        this.$el.toggleClass('o_top_cover', offset.top - editableOffsetTop < 10);
     },
     /**
      * @return {boolean}
@@ -192,17 +194,23 @@ var SnippetEditor = Widget.extend({
     /**
      * Removes the associated snippet from the DOM and destroys the associated
      * editor (itself).
+     *
+     * @returns {Promise}
      */
-    removeSnippet: function () {
+    removeSnippet: async function () {
         this.toggleFocus(false);
+        this.trigger_up('will_remove_snippet', {$target: this.$target});
 
-        this.trigger_up('call_for_each_child_snippet', {
-            $snippet: this.$target,
-            callback: function (editor, $snippet) {
-                for (var i in editor.styles) {
-                    editor.styles[i].onRemove();
-                }
-            },
+        await new Promise(resolve => {
+            this.trigger_up('call_for_each_child_snippet', {
+                $snippet: this.$target,
+                callback: function (editor, $snippet) {
+                    for (var i in editor.styles) {
+                        editor.styles[i].onRemove();
+                    }
+                },
+                onSuccess: resolve,
+            });
         });
 
         this.trigger_up('go_to_parent', {$snippet: this.$target});
@@ -229,6 +237,8 @@ var SnippetEditor = Widget.extend({
                 editor = $parent.data('snippet-editor');
             }
             if (isEmptyAndRemovable($parent, editor)) {
+                // TODO maybe this should be part of the actual Promise being
+                // returned by the function ?
                 setTimeout(() => editor.removeSnippet());
             }
         }
@@ -244,7 +254,8 @@ var SnippetEditor = Widget.extend({
         function isEmptyAndRemovable($el, editor) {
             editor = editor || $el.data('snippet-editor');
             return $el.children().length === 0 && $el.text().trim() === ''
-                && !$el.hasClass('oe_structure') && (!editor || editor.isTargetParentEditable);
+                && !$el.hasClass('oe_structure') && !$el.parent().hasClass('carousel-item')
+                && (!editor || editor.isTargetParentEditable);
         }
     },
     /**
@@ -312,6 +323,36 @@ var SnippetEditor = Widget.extend({
             this.$el.toggleClass('o_keypress', !!isTextEdition && this.isShown());
         }
     },
+    /**
+     * Clones the current snippet.
+     *
+     * @private
+     * @param {boolean} recordUndo
+     */
+    clone: function (recordUndo) {
+        this.trigger_up('snippet_will_be_cloned', {$target: this.$target});
+
+        var $clone = this.$target.clone(false);
+
+        if (recordUndo) {
+            this.trigger_up('request_history_undo_record', {$target: this.$target});
+        }
+
+        this.$target.after($clone);
+        this.trigger_up('call_for_each_child_snippet', { // FIXME should be awaited
+            $snippet: $clone,
+            callback: function (editor, $snippet) {
+                for (var i in editor.styles) {
+                    editor.styles[i].onClone({
+                        isCurrent: ($snippet.is($clone)),
+                    });
+                }
+            },
+        });
+        this.trigger_up('snippet_cloned', {$target: $clone, $origin: this.$target});
+
+        $clone.trigger('content_changed');
+    },
 
     //--------------------------------------------------------------------------
     // Private
@@ -358,7 +399,7 @@ var SnippetEditor = Widget.extend({
         var $optionsSection = $(core.qweb.render('web_editor.customize_block_options_section', {
             name: this._getName(),
         })).data('editor', this);
-        $optionsSection.on('mouseover', this._onOptionsSectionMouseOver.bind(this));
+        $optionsSection.on('mouseenter', this._onOptionsSectionMouseOver.bind(this));
         $optionsSection.on('mouseleave', this._onOptionsSectionMouseLeave.bind(this));
         $optionsSection.on('click', 'we-title > span', this._onOptionsSectionClick.bind(this));
         $optionsSection.on('click', '.oe_snippet_clone', this._onCloneClick.bind(this));
@@ -410,6 +451,25 @@ var SnippetEditor = Widget.extend({
 
         return Promise.all(defs);
     },
+    /**
+     * Returns false if the element matches a snippet block that cannot be
+     * dropped in a sanitized HTML field.
+     *
+     * @param {Element} el
+     * @return {boolean}
+     */
+    _canBeSanitized(el) {
+        let result = true;
+        this.trigger_up('find_snippet_template', {
+            snippet: el,
+            callback: function (snippetTemplate) {
+                if (snippetTemplate.querySelector('.oe_forbid_sanitize')) {
+                    result = false;
+                }
+            },
+        });
+        return result;
+    },
 
     //--------------------------------------------------------------------------
     // Handlers
@@ -423,26 +483,7 @@ var SnippetEditor = Widget.extend({
      */
     _onCloneClick: function (ev) {
         ev.preventDefault();
-        ev.stopPropagation();
-
-        this.trigger_up('snippet_will_be_cloned', {$target: this.$target});
-
-        var $clone = this.$target.clone(false);
-
-        this.trigger_up('request_history_undo_record', {$target: this.$target});
-        this.$target.after($clone);
-        this.trigger_up('call_for_each_child_snippet', {
-            $snippet: $clone,
-            callback: function (editor, $snippet) {
-                for (var i in editor.styles) {
-                    editor.styles[i].onClone({
-                        isCurrent: ($snippet.is($clone)),
-                    });
-                }
-            },
-        });
-        this.trigger_up('snippet_cloned', {$target: $clone, $origin: this.$target});
-        $clone.trigger('content_changed');
+        this.clone(true);
     },
     /**
      * Called when the snippet is starting to be dragged thanks to the 'move'
@@ -477,25 +518,37 @@ var SnippetEditor = Widget.extend({
                 $selectorChildren = $selectorChildren.add(self.selectorChildren[i].all());
             }
         }
+        const canBeSanitized = this._canBeSanitized(this.$target[0]);
 
         this.trigger_up('go_to_parent', {$snippet: this.$target});
         this.trigger_up('activate_insertion_zones', {
             $selectorSiblings: $selectorSiblings,
             $selectorChildren: $selectorChildren,
+            canBeSanitized: canBeSanitized,
         });
 
         this.$body.addClass('move-important');
-
-        this.$editable.find('.oe_drop_zone').droppable({
+        
+        this.$dropZones = this.$editable.find('.oe_drop_zone');
+        if (!canBeSanitized) {
+            this.$dropZones = this.$dropZones.not('[data-oe-sanitize] .oe_drop_zone');
+        }
+        this.$dropZones.droppable({
             over: function () {
-                self.$editable.find('.oe_drop_zone.hide').removeClass('hide');
-                $(this).addClass('hide').first().after(self.$target);
+                if (self.dropped) {
+                    self.$target.detach();
+                    $('.oe_drop_zone').removeClass('invisible');
+                }
                 self.dropped = true;
+                $(this).first().after(self.$target).addClass('invisible');
             },
             out: function () {
-                $(this).removeClass('hide');
-                self.$target.detach();
-                self.dropped = false;
+                var prev = self.$target.prev();
+                if (this === prev[0]) {
+                    self.dropped = false;
+                    self.$target.detach();
+                    $(this).removeClass('invisible');
+                }
             },
         });
     },
@@ -511,13 +564,16 @@ var SnippetEditor = Widget.extend({
         // TODO lot of this is duplicated code of the d&d feature of snippets
         if (!this.dropped) {
             var $el = $.nearest({x: ui.position.left, y: ui.position.top}, '.oe_drop_zone', {container: document.body}).first();
+            // Some drop zones might have been disabled.
+            $el = $el.filter(this.$dropZones);
             if ($el.length) {
                 $el.after(this.$target);
                 this.dropped = true;
             }
         }
 
-        this.$editable.find('.oe_drop_zone').droppable('destroy').remove();
+        this.$dropZones.droppable('destroy');
+        this.$editable.find('.oe_drop_zone').remove();
 
         var prev = this.$target.first()[0].previousSibling;
         var next = this.$target.last()[0].nextSibling;
@@ -558,6 +614,7 @@ var SnippetEditor = Widget.extend({
         this.trigger_up('drag_and_drop_stop', {
             $snippet: this.$target,
         });
+        delete this.$dropZones;
     },
     /**
      * @private
@@ -651,10 +708,12 @@ var SnippetsMenu = Widget.extend({
         'activate_insertion_zones': '_onActivateInsertionZones',
         'activate_snippet': '_onActivateSnippet',
         'call_for_each_child_snippet': '_onCallForEachChildSnippet',
+        'clone_snippet': '_onCloneSnippet',
         'cover_update': '_onOverlaysCoverUpdate',
         'deactivate_snippet': '_onDeactivateSnippet',
         'drag_and_drop_stop': '_onDragAndDropStop',
         'go_to_parent': '_onGoToParent',
+        'find_snippet_template': '_onFindSnippetTemplate',
         'remove_snippet': '_onRemoveSnippet',
         'snippet_removed': '_onSnippetRemoved',
         'reload_snippet_dropzones': '_disableUndroppableSnippets',
@@ -899,57 +958,90 @@ var SnippetsMenu = Widget.extend({
     _activateInsertionZones: function ($selectorSiblings, $selectorChildren) {
         var self = this;
 
-        function isFullWidth($elem) {
-            return $elem.parent().width() === $elem.outerWidth(true);
+        // If a dropdown is shown, the drop zones must be created only in this
+        // element.
+        const $editableArea = self.getEditableArea();
+        const $dropdown = $editableArea.find('.dropdown-menu.show').addBack('.dropdown-menu.show').parent();
+        if ($dropdown.length) {
+            $selectorSiblings = $dropdown.find($selectorSiblings);
+            $selectorChildren = $dropdown.find($selectorChildren);
+        }
+
+        // Check if the drop zone should be horizontal or vertical
+        function setDropZoneDirection($elem, $parent, $sibling) {
+            var vertical = false;
+            var style = {};
+            $sibling = $sibling || $elem;
+            var css = window.getComputedStyle($elem[0]);
+            var parentCss = window.getComputedStyle($parent[0]);
+            var float = css.float || css.cssFloat;
+            var display = parentCss.display;
+            var flex = parentCss.flexDirection;
+            if (float === 'left' || float === 'right' || (display === 'flex' && flex === 'row')) {
+                style['float'] = float;
+                if ($sibling.parent().width() !== $sibling.outerWidth(true)) {
+                    vertical = true;
+                    style['height'] = Math.max($sibling.outerHeight(), 30) + 'px';
+                }
+            }
+            return {
+                vertical: vertical,
+                style: style,
+            };
+        }
+
+        // If the previous sibling is a BR tag or a non-whitespace text, it
+        // should be a vertical dropzone.
+        function testPreviousSibling(node, $zone) {
+            if (!node || ((node.tagName || !node.textContent.match(/\S/)) && node.tagName !== 'BR')) {
+                return false;
+            }
+            return {
+                vertical: true,
+                style: {
+                    'float': 'none',
+                    'display': 'inline-block',
+                    'height': parseInt(self.window.getComputedStyle($zone[0]).lineHeight) + 'px',
+                },
+            };
+        }
+
+        // Firstly, add a dropzone after the clone
+        var $clone = $('.oe_drop_clone');
+        if ($clone.length) {
+            var $neighbor = $clone.prev();
+            if (!$neighbor.length) {
+                $neighbor = $clone.next();
+            }
+            var data;
+            if ($neighbor.length) {
+                data = setDropZoneDirection($neighbor, $neighbor.parent());
+            } else {
+                data = {
+                    vertical: false,
+                    style: {},
+                };
+            }
+            self._insertDropzone($('<we-hook/>').insertAfter($clone), data.vertical, data.style);
         }
 
         if ($selectorChildren) {
             $selectorChildren.each(function () {
+                var data;
                 var $zone = $(this);
-                var style;
-                var vertical;
-                var node;
-                var css = self.window.getComputedStyle(this);
-                var parentCss = self.window.getComputedStyle($zone.parent()[0]);
-                var float = css.float || css.cssFloat;
-                var parentDisplay = parentCss.display;
-                var parentFlex = parentCss.flexDirection;
+                var $children = $zone.find('> :not(.oe_drop_zone, .oe_drop_clone)');
 
-                style = {};
-                vertical = false;
-                node = $zone[0].lastChild;
-                var test = !!(node && ((!node.tagName && node.textContent.match(/\S/)) || node.tagName === 'BR'));
-                if (test) {
-                    vertical = true;
-                    style['float'] = 'none';
-                    style['height'] = parseInt(self.window.getComputedStyle($zone[0]).lineHeight) + 'px';
-                    style['display'] = 'inline-block';
-                } else if (float === 'left' || float === 'right' || (parentDisplay === 'flex' && parentFlex === 'row')) {
-                    style['float'] = float;
-                    if (!isFullWidth($zone)) {
-                        vertical = true;
-                        style['height'] = Math.max($zone.outerHeight(), 30) + 'px';
-                    }
+                if (!$zone.children().last().is('.oe_drop_zone')) {
+                    data = testPreviousSibling($zone[0].lastChild, $zone)
+                        || setDropZoneDirection($zone, $zone, $children.last());
+                    self._insertDropzone($('<we-hook/>').appendTo($zone), data.vertical, data.style);
                 }
-                self._insertDropzone($('<we-hook/>').appendTo($zone), vertical, style);
 
-                style = {};
-                vertical = false;
-                node = $zone[0].firstChild;
-                test = !!(node && ((!node.tagName && node.textContent.match(/\S/)) || node.tagName === 'BR'));
-                if (test) {
-                    vertical = true;
-                    style['float'] = 'none';
-                    style['height'] = parseInt(self.window.getComputedStyle($zone[0]).lineHeight) + 'px';
-                    style['display'] = 'inline-block';
-                } else if (float === 'left' || float === 'right' || (parentDisplay === 'flex' && parentFlex === 'row')) {
-                    style['float'] = float;
-                    if (!isFullWidth($zone)) {
-                        vertical = true;
-                        style['height'] = Math.max($zone.outerHeight(), 30) + 'px';
-                    }
+                if (!$zone.children().first().is('.oe_drop_clone')) {
+                    data = testPreviousSibling($zone[0].firstChild, $zone)
+                        || setDropZoneDirection($zone, $zone, $children.first());
+                    self._insertDropzone($('<we-hook/>').prependTo($zone), data.vertical, data.style);
                 }
-                self._insertDropzone($('<we-hook/>').prependTo($zone), vertical, style);
             });
 
             // add children near drop zone
@@ -957,39 +1049,17 @@ var SnippetsMenu = Widget.extend({
         }
 
         if ($selectorSiblings) {
-            $selectorSiblings.filter(':not(.oe_drop_zone):not(.oe_drop_clone)').each(function () {
+            $selectorSiblings.not('.oe_drop_zone, .oe_drop_clone').each(function () {
+                var data;
                 var $zone = $(this);
-                var style;
-                var vertical;
-                var css = self.window.getComputedStyle(this);
-                var parentCss = self.window.getComputedStyle($zone.parent()[0]);
-                var float = css.float || css.cssFloat;
-                var parentDisplay = parentCss.display;
-                var parentFlex = parentCss.flexDirection;
 
-                if ($zone.prev('.oe_drop_zone:visible').length === 0) {
-                    style = {};
-                    vertical = false;
-                    if (float === 'left' || float === 'right' || (parentDisplay === 'flex' && parentFlex === 'row')) {
-                        style['float'] = float;
-                        if (!isFullWidth($zone)) {
-                            vertical = true;
-                            style['height'] = Math.max($zone.outerHeight(), 30) + 'px';
-                        }
-                    }
-                    self._insertDropzone($('<we-hook/>').insertBefore($zone), vertical, style);
+                if (!$zone.prev('.oe_drop_zone:visible, .oe_drop_clone').length) {
+                    data = setDropZoneDirection($zone, $zone.parent());
+                    self._insertDropzone($('<we-hook/>').insertBefore($zone), data.vertical, data.style);
                 }
-                if ($zone.next('.oe_drop_zone:visible').length === 0) {
-                    style = {};
-                    vertical = false;
-                    if (float === 'left' || float === 'right' || (parentDisplay === 'flex' && parentFlex === 'row')) {
-                        style['float'] = float;
-                        if (!isFullWidth($zone)) {
-                            vertical = true;
-                            style['height'] = Math.max($zone.outerHeight(), 30) + 'px';
-                        }
-                    }
-                    self._insertDropzone($('<we-hook/>').insertAfter($zone), vertical, style);
+                if (!$zone.next('.oe_drop_zone:visible, .oe_drop_clone').length) {
+                    data = setDropZoneDirection($zone, $zone.parent());
+                    self._insertDropzone($('<we-hook/>').insertAfter($zone), data.vertical, data.style);
                 }
             });
         }
@@ -1296,15 +1366,26 @@ var SnippetsMenu = Widget.extend({
                     $els.attr('data-name', name).data('name', name);
                 }
 
+                // TODO Adapt in each stable version to target specific
+                // snippets, remove in master.
+                if ($snippet[0].querySelector('form')) {
+                    // In stable, make sure that existing FORM snippets cannot
+                    // be dropped in sanitized HTML model fields.
+                    $snippet.data('oeForbidSanitize', 'true');
+                }
+
+                // TODO Simplify in 14.0 when all snippets use t-snippet.
                 // Create the thumbnail
-                if ($snippet.find('.oe_snippet_thumbnail').length) {
+                const $existingThumbnail = $snippet.find('.oe_snippet_thumbnail');
+                if ($existingThumbnail.length) {
                     return; // Compatibility with elements which do not use 't-snippet'
                 }
                 var $thumbnail = $(_.str.sprintf(
                     '<div class="oe_snippet_thumbnail">' +
-                        '<div class="oe_snippet_thumbnail_img" style="background-image: url(%s);"/>' +
+                        '<div class="oe_snippet_thumbnail_img %s" style="background-image: url(%s);"/>' +
                         '<span class="oe_snippet_thumbnail_title">%s</span>' +
                     '</div>',
+                    $snippet.data('oeForbidSanitize') ? "oe_forbid_sanitize" : "",
                     $snippet.find('[data-oe-thumbnail]').data('oeThumbnail'),
                     name
                 ));
@@ -1410,6 +1491,10 @@ var SnippetsMenu = Widget.extend({
         this.$snippets.each(function () {
             var $snippet = $(this);
             var $snippetBody = $snippet.find('.oe_snippet_body');
+            const isSanitizeForbidden = $snippet.data('oeForbidSanitize');
+            const filterSanitize = isSanitizeForbidden
+                ? $els => $els.filter((i, el) => !el.closest('[data-oe-sanitize]'))
+                : $els => $els;
 
             var check = false;
             _.each(self.templateOptions, function (option, k) {
@@ -1417,9 +1502,10 @@ var SnippetsMenu = Widget.extend({
                     return;
                 }
 
+                k = isSanitizeForbidden ? 'forbidden/' + k : k;
                 cache[k] = cache[k] || {
-                    'drop-near': option['drop-near'] ? option['drop-near'].all().length : 0,
-                    'drop-in': option['drop-in'] ? option['drop-in'].all().length : 0
+                    'drop-near': option['drop-near'] ? filterSanitize(option['drop-near'].all()).length : 0,
+                    'drop-in': option['drop-in'] ? filterSanitize(option['drop-in'].all()).length : 0,
                 };
                 check = (cache[k]['drop-near'] || cache[k]['drop-in']);
             });
@@ -1438,11 +1524,19 @@ var SnippetsMenu = Widget.extend({
      * @param {Object} [style]
      */
     _insertDropzone: function ($hook, vertical, style) {
+        // TODO Done this way in stable but should be a parameter in master.
+        const forbidSanitize = !this._insertDropzoneCanBeSanitized && $hook.closest('[data-oe-sanitize]').length;
         var $dropzone = $('<div/>', {
-            'class': 'oe_drop_zone oe_insert' + (vertical ? ' oe_vertical' : ''),
+            'class': 'oe_drop_zone oe_insert' + (vertical ? ' oe_vertical' : '') +
+                (forbidSanitize ? ' text-center oe_drop_zone_danger' : ''),
         });
         if (style) {
             $dropzone.css(style);
+        }
+        if (forbidSanitize) {
+            $dropzone[0].appendChild(document.createTextNode(
+                _t("For technical reasons, this block cannot be dropped here")
+            ));
         }
         $hook.replaceWith($dropzone);
         return $dropzone;
@@ -1459,6 +1553,7 @@ var SnippetsMenu = Widget.extend({
         var left = $tumb.outerWidth() / 2;
         var top = $tumb.outerHeight() / 2;
         var $toInsert, dropped, $snippet;
+        let $dropZones;
 
         $snippets.draggable({
             greedy: true,
@@ -1489,6 +1584,13 @@ var SnippetsMenu = Widget.extend({
                     }
                 }
 
+                // TODO mentioning external app snippet but done as a stable fix
+                // that will be adapted in master: if popup snippet, do not
+                // allow to add it in another snippet
+                if ($baseBody[0].matches('.o_newsletter_popup')) {
+                    $selectorChildren = $selectorChildren.not('.oe_structure *, [data-oe-type=html] *');
+                }
+
                 $toInsert = $baseBody.clone();
 
                 if (!$selectorSiblings.length && !$selectorChildren.length) {
@@ -1497,22 +1599,33 @@ var SnippetsMenu = Widget.extend({
                 }
 
                 self._activateSnippet(false);
+                // TODO Done this way in stable but should be a parameter in
+                // master.
+                self._insertDropzoneCanBeSanitized = !$snippet.data('oeForbidSanitize');
                 self._activateInsertionZones($selectorSiblings, $selectorChildren);
+                delete self._insertDropzoneCanBeSanitized;
 
-                self.getEditableArea().find('.oe_drop_zone').droppable({
+                $dropZones = self.getEditableArea().find('.oe_drop_zone');
+                if ($snippet.data('oeForbidSanitize')) {
+                    $dropZones = $dropZones.filter((i, el) => !el.closest('[data-oe-sanitize] .oe_drop_zone'));
+                }
+                $dropZones.droppable({
                     over: function () {
-                        if (!dropped) {
-                            dropped = true;
-                            $(this).first().after($toInsert).addClass('d-none');
-                            $toInsert.removeClass('oe_snippet_body');
+                        if (dropped) {
+                            $toInsert.detach();
+                            $toInsert.addClass('oe_snippet_body');
+                            $('.oe_drop_zone').removeClass('invisible');
                         }
+                        dropped = true;
+                        $(this).first().after($toInsert).addClass('invisible');
+                        $toInsert.removeClass('oe_snippet_body');
                     },
                     out: function () {
                         var prev = $toInsert.prev();
                         if (this === prev[0]) {
                             dropped = false;
                             $toInsert.detach();
-                            $(this).removeClass('d-none');
+                            $(this).removeClass('invisible');
                             $toInsert.addClass('oe_snippet_body');
                         }
                     },
@@ -1523,13 +1636,16 @@ var SnippetsMenu = Widget.extend({
 
                 if (!dropped && ui.position.top > 3 && ui.position.left + 50 > self.$el.outerWidth()) {
                     var $el = $.nearest({x: ui.position.left, y: ui.position.top}, '.oe_drop_zone', {container: document.body}).first();
+                    // Some drop zones might have been disabled.
+                    $el = $el.filter($dropZones);
                     if ($el.length) {
                         $el.after($toInsert);
                         dropped = true;
                     }
                 }
 
-                self.getEditableArea().find('.oe_drop_zone').droppable('destroy').remove();
+                $dropZones.droppable('destroy');
+                self.getEditableArea().find('.oe_drop_zone').remove();
 
                 if (dropped) {
                     var prev = $toInsert.first()[0].previousSibling;
@@ -1600,7 +1716,10 @@ var SnippetsMenu = Widget.extend({
      * @param {OdooEvent} ev
      */
     _onActivateInsertionZones: function (ev) {
+        // TODO Done this way in stable but should be a parameter in master.
+        this._insertDropzoneCanBeSanitized = ev.data.canBeSanitized;
         this._activateInsertionZones(ev.data.$selectorSiblings, ev.data.$selectorChildren);
+        delete this._insertDropzoneCanBeSanitized;
     },
     /**
      * Called when a child editor asks to deactivate the current snippet
@@ -1619,7 +1738,10 @@ var SnippetsMenu = Widget.extend({
      * @param {OdooEvent} ev
      */
     _onCallForEachChildSnippet: function (ev) {
-        this._callForEachChildSnippet(ev.data.$snippet, ev.data.callback);
+        const prom = this._callForEachChildSnippet(ev.data.$snippet, ev.data.callback);
+        if (ev.data.onSuccess) {
+            prom.then(() => ev.data.onSuccess());
+        }
     },
     /**
      * Called when asked to clean the DOM for save. Should technically not be
@@ -1651,6 +1773,19 @@ var SnippetsMenu = Widget.extend({
         });
     },
     /**
+     * Called when a child editor asks to clone a snippet, allows to correctly
+     * call the _onClone methods if the element's editor has one.
+     *
+     * @private
+     * @param {OdooEvent} ev
+     */
+    _onCloneSnippet: function (ev) {
+        ev.stopPropagation();
+        this._createSnippetEditor(ev.data.$snippet).then(editor => {
+            editor.clone();
+        });
+    },
+    /**
      * Called when a child editor asks to deactivate the current snippet
      * overlay.
      *
@@ -1668,6 +1803,31 @@ var SnippetsMenu = Widget.extend({
     _onDragAndDropStop: function (ev) {
         this._destroyEditors();
         this._activateSnippet(ev.data.$snippet);
+    },
+    /**
+     * Returns the droppable snippet from which a dropped snippet originates.
+     * TODO In later version this can be rewritten to rely on the data-snippet
+     * attribute instead.
+     *
+     * @private
+     * @param {OdooEvent} ev
+     */
+    _onFindSnippetTemplate(ev) {
+        this.$snippets.each(function () {
+            const snippetBody = this.querySelector('.oe_snippet_body');
+            // "s_*" classnames should only be snippet names, but there are
+            // some "s_parallax_*" classes that can be applied to non
+            // "s_parallax" snippets, leading to wrong matches.
+            let snippetClasses = snippetBody.className.match(/s_(?!parallax_)\S+/g);
+            if (snippetClasses) {
+                for (const snippetClass of snippetClasses) {
+                    if (ev.data.snippet.classList.contains(snippetClass)) {
+                        ev.data.callback(snippetBody.parentElement);
+                        return false;
+                    }
+                }
+            }
+        });
     },
     /**
      * Called when a snippet editor asked to disable itself and to enable its

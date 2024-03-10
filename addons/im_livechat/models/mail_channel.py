@@ -2,6 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import api, fields, models, _
+from odoo.tools import html_escape
 
 class ChannelPartner(models.Model):
     _inherit = 'mail.channel.partner'
@@ -45,8 +46,6 @@ class MailChannel(models.Model):
         for record in self:
             if record.channel_type == 'livechat':
                 record.is_chat = True
-            else:
-                record.is_chat = False
 
     def _channel_message_notifications(self, message, message_format=False):
         """ When a anonymous user create a mail.channel, the operator is not notify (to avoid massive polling when
@@ -84,7 +83,8 @@ class MailChannel(models.Model):
             if channel.channel_type == 'livechat':
                 # add the operator id
                 if channel.livechat_operator_id:
-                    channel_infos_dict[channel.id]['operator_pid'] = channel.livechat_operator_id.with_context(im_livechat_use_username=True).name_get()[0]
+                    res = channel.livechat_operator_id.with_context(im_livechat_use_username=True).name_get()[0]
+                    channel_infos_dict[channel.id]['operator_pid'] = (res[0], res[1].replace(',', ''))
                 # add the anonymous or partner name
                 channel_infos_dict[channel.id]['correspondent_name'] = channel._channel_get_livechat_partner_name()
                 last_msg = self.env['mail.message'].search([("channel_ids", "in", [channel.id])], limit=1)
@@ -149,7 +149,7 @@ class MailChannel(models.Model):
     def _send_history_message(self, pid, page_history):
         message_body = _('No history found')
         if page_history:
-            html_links = ['<li><a href="%s" target="_blank">%s</a></li>' % (page, page) for page in page_history]
+            html_links = ['<li><a href="%s" target="_blank">%s</a></li>' % (html_escape(page), html_escape(page)) for page in page_history]
             message_body = '<span class="o_mail_notification"><ul>%s</ul></span>' % (''.join(html_links))
         self.env['bus.bus'].sendone((self._cr.dbname, 'res.partner', pid), {
             'body': message_body,

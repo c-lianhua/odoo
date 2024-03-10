@@ -116,8 +116,20 @@ var PagePropertiesDialog = weWidgets.Dialog.extend({
             });
             dep_text = dep_text.join(', ');
             self.$('#dependencies_redirect').html(qweb.render('website.show_page_dependencies', { dependencies: dependencies, dep_text: dep_text }));
-            self.$('#dependencies_redirect [data-toggle="popover"]').popover({
-                container: 'body',
+            self.$('a.o_dependencies_redirect_link').on('click', () => {
+                self.$('.o_dependencies_redirect_list_popover').popover({
+                    html: true,
+                    title: _t('Dependencies'),
+                    boundary: 'viewport',
+                    placement: 'right',
+                    trigger: 'focus',
+                    content: () => {
+                        return qweb.render('website.get_tooltip_dependencies', {
+                            dependencies: dependencies,
+                        });
+                    },
+                    template: qweb.render('website.page_dependencies_popover'),
+                }).popover('toggle');
             });
         }));
 
@@ -434,7 +446,8 @@ var SelectEditMenuDialog = weWidgets.Dialog.extend({
         var self = this;
         self.roots = [{id: null, name: _t("Top Menu")}];
         $('[data-content_menu_id]').each(function () {
-            self.roots.push({id: $(this).data('content_menu_id'), name: $(this).attr('name')});
+            // Remove name fallback in master
+            self.roots.push({id: $(this).data('content_menu_id'), name: $(this).attr('name') || $(this).data('menu_name')});
         });
         this._super(parent, _.extend({}, {
             title: _t("Select a Menu"),

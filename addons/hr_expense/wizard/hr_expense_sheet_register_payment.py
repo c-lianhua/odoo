@@ -24,7 +24,7 @@ class HrExpenseSheetRegisterPaymentWizard(models.TransientModel):
 
         if 'partner_id' in fields and active_id and not result.get('partner_id'):
             expense_sheet = self.env['hr.expense.sheet'].browse(active_id)
-            result['partner_id'] = expense_sheet.address_id.id or expense_sheet.employee_id.id and expense_sheet.employee_id.address_home_id.id
+            result['partner_id'] = expense_sheet.sudo().address_id.id or expense_sheet.sudo().employee_id.id and expense_sheet.sudo().employee_id.address_home_id.id
         return result
 
     expense_sheet_id = fields.Many2one('hr.expense.sheet', string="Expense Report", required=True)
@@ -102,8 +102,13 @@ class HrExpenseSheetRegisterPaymentWizard(models.TransientModel):
             'communication': self.communication
         }
 
+    def _prepare_lines_to_reconcile(self, lines):
+        return lines.filtered(lambda l: l.account_id.internal_type == 'payable' and not l.reconciled)
+
     def expense_post_payment(self):
         self.ensure_one()
+        company = self.company_id
+        self = self.with_context(force_company=company.id, company_id=company.id)
         context = dict(self._context or {})
         active_ids = context.get('active_ids', [])
         expense_sheet = self.env['hr.expense.sheet'].browse(active_ids)
@@ -117,10 +122,7 @@ class HrExpenseSheetRegisterPaymentWizard(models.TransientModel):
         expense_sheet.message_post(body=body)
 
         # Reconcile the payment and the expense, i.e. lookup on the payable account move lines
-        account_move_lines_to_reconcile = self.env['account.move.line']
-        for line in payment.move_line_ids + expense_sheet.account_move_id.line_ids:
-            if line.account_id.internal_type == 'payable' and not line.reconciled:
-                account_move_lines_to_reconcile |= line
+        account_move_lines_to_reconcile = self._prepare_lines_to_reconcile(payment.move_line_ids + expense_sheet.account_move_id.line_ids)
         account_move_lines_to_reconcile.reconcile()
 
         return {'type': 'ir.actions.act_window_close'}

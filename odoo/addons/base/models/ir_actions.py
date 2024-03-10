@@ -6,8 +6,7 @@ from odoo import api, fields, models, tools, SUPERUSER_ID, _
 from odoo.exceptions import MissingError, UserError, ValidationError, AccessError
 from odoo.osv import expression
 from odoo.tools.safe_eval import safe_eval, test_python_expr
-from odoo.tools import wrap_module
-from odoo.http import request
+from odoo.tools.float_utils import float_compare
 
 import base64
 from collections import defaultdict
@@ -15,19 +14,10 @@ import datetime
 import logging
 import time
 
+import dateutil
 from pytz import timezone
 
 _logger = logging.getLogger(__name__)
-
-# build dateutil helper, starting with the relevant *lazy* imports
-import dateutil
-import dateutil.parser
-import dateutil.relativedelta
-import dateutil.rrule
-import dateutil.tz
-mods = {'parser', 'relativedelta', 'rrule', 'tz'}
-attribs = {atr for m in mods for atr in getattr(dateutil, m).__all__}
-dateutil = wrap_module(dateutil, mods | attribs)
 
 
 class IrActions(models.Model):
@@ -87,6 +77,7 @@ class IrActions(models.Model):
             'datetime': datetime,
             'dateutil': dateutil,
             'timezone': timezone,
+            'float_compare': float_compare,
             'b64encode': base64.b64encode,
             'b64decode': base64.b64decode,
         }
@@ -336,6 +327,7 @@ class IrActionsServer(models.Model):
 #  - record: record on which the action is triggered; may be void
 #  - records: recordset of all records on which the action is triggered in multi-mode; may be void
 #  - time, datetime, dateutil, timezone: useful Python libraries
+#  - float_compare: Odoo function to compare floats based on specific precisions
 #  - log: log(message, level='info'): logging function to record debug information in ir.logging table
 #  - Warning: Warning Exception to use with raise
 # To return an action, assign: action = {...}\n\n\n\n"""
@@ -559,7 +551,7 @@ class IrActionsServer(models.Model):
                     # call the single method related to the action: run_action_<STATE>
                     func = getattr(run_self, 'run_action_%s' % action.state)
                     res = func(action, eval_context=eval_context)
-        return res
+        return res or False
 
     @api.model
     def _run_actions(self, ids):
@@ -611,6 +603,11 @@ class IrServerObjectLines(models.Model):
                 line.resource_ref = '%s,%s' % (line.col1.relation, value)
             else:
                 line.resource_ref = False
+
+    @api.constrains('col1', 'evaluation_type')
+    def _raise_many2many_error(self):
+        if self.filtered(lambda line: line.col1.ttype == 'many2many' and line.evaluation_type == 'reference'):
+            raise ValidationError(_('many2many fields cannot be evaluated by reference'))
 
     @api.onchange('resource_ref')
     def _set_resource_ref(self):

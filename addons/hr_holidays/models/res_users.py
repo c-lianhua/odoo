@@ -12,6 +12,7 @@ class User(models.Model):
     allocation_used_count = fields.Float(related='employee_id.allocation_used_count')
     allocation_count = fields.Float(related='employee_id.allocation_count')
     leave_date_to = fields.Date(related='employee_id.leave_date_to')
+    current_leave_state = fields.Selection(related='employee_id.current_leave_state')
     is_absent = fields.Boolean(related='employee_id.is_absent')
     allocation_used_display = fields.Char(related='employee_id.allocation_used_display')
     allocation_display = fields.Char(related='employee_id.allocation_display')
@@ -28,6 +29,7 @@ class User(models.Model):
             'allocation_used_count',
             'allocation_count',
             'leave_date_to',
+            'current_leave_state',
             'is_absent',
             'allocation_used_display',
             'allocation_display',
@@ -53,7 +55,23 @@ class User(models.Model):
         field = 'partner_id' if partner else 'id'
         self.env.cr.execute('''SELECT res_users.%s FROM res_users
                             JOIN hr_leave ON hr_leave.user_id = res_users.id
-                            AND state not in ('cancel', 'refuse')
+                            AND state in ('validate')
                             AND res_users.active = 't'
                             AND date_from <= %%s AND date_to >= %%s''' % field, (now, now))
         return [r[0] for r in self.env.cr.fetchall()]
+
+    def _clean_leave_responsible_users(self):
+        # self = old bunch of leave responsibles
+        # This method compares the current leave managers
+        # and remove the access rights to those who don't
+        # need them anymore
+        approver_group = self.env.ref('hr_holidays.group_hr_holidays_responsible', raise_if_not_found=False)
+        if not self or not approver_group:
+            return
+        res = self.env['hr.employee'].read_group(
+            [('leave_manager_id', 'in', self.ids)],
+            ['leave_manager_id'],
+            ['leave_manager_id'])
+        responsibles_to_remove_ids = set(self.ids) - {x['leave_manager_id'][0] for x in res}
+        approver_group.sudo().write({
+            'users': [(3, manager_id) for manager_id in responsibles_to_remove_ids]})

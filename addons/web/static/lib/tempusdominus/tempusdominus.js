@@ -45,7 +45,14 @@ var DateTimePicker = function ($, moment) {
         EVENT_KEY = '.' + DATA_KEY,
         DATA_API_KEY = '.data-api',
         Selector = {
-        DATA_TOGGLE: '[data-toggle="' + DATA_KEY + '"]'
+        // /!\ ODOO PATCH: ensure the datetimepickers can be toggled only after
+        // the Odoo lazy loader finished loading all lazy scripts. Another
+        // solution could have been to temporarily removing the data-toggle
+        // attributes during lazyloading but that would not have been stable as
+        // custom code could search for data-toggle elements while the lazy
+        // loading is being performed. Without this, clicking too soon on a
+        // datetimepicker would not use the right format and UI options.
+        DATA_TOGGLE: 'body:not(.o_lazy_js_waiting) [data-toggle="' + DATA_KEY + '"]'
     },
         ClassName = {
         INPUT: NAME + '-input'
@@ -137,7 +144,7 @@ var DateTimePicker = function ($, moment) {
             previous: 'fa fa-chevron-left',
             next: 'fa fa-chevron-right',
             today: 'fa fa-calendar-check-o',
-            clear: 'fa fa-delete',
+            clear: 'fa fa-trash',
             close: 'fa fa-times'
         },
         tooltips: {
@@ -2092,9 +2099,11 @@ var TempusDominusBootstrap4 = function ($) {
                 daysViewHeader.eq(2).addClass('disabled');
             }
 
-            currentDate = this._viewDate.clone().startOf('M').startOf('w').startOf('d');
             // !! ODOO FIX START !!
             var now = this.getMoment();
+            // currentDate = this._viewDate.clone().startOf('M').startOf('w').startOf('d');
+            // avoid issue of safari + DST at midnight
+            currentDate = this._viewDate.clone().startOf('M').startOf('w').add(12, 'hours');
             // !! ODOO FIX END !!
 
             for (i = 0; i < 42; i++) {
@@ -2777,7 +2786,8 @@ var TempusDominusBootstrap4 = function ($) {
         if ($target.length === 0) {
             return;
         }
-        if (!config._options.allowInputToggle) {
+        // /!\ ODOO FIX: check on 'config' existence added by odoo
+        if (!(config && config._options.allowInputToggle)) {
             return;
         }
         TempusDominusBootstrap4._jQueryInterface.call($target, 'show', event);

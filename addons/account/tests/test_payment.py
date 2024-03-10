@@ -44,6 +44,9 @@ class TestPayment(AccountingTestCase):
 
         self.form_payment = Form(self.env['account.payment'])
 
+        self.bank = self.env['res.bank'].create({'name': 'Test Bank'})
+
+
     def create_invoice(self, amount=100, type='out_invoice', currency_id=None, partner=None, account_id=None):
         """ Returns an open invoice """
         invoice = self.env['account.move'].create({
@@ -58,6 +61,19 @@ class TestPayment(AccountingTestCase):
         })
         invoice.post()
         return invoice
+
+    def create_payment(self, partner=None, journal=None):
+        """ Returns a payment """
+        payment = self.env['account.payment'].create({
+            'payment_date': time.strftime('%Y') + '-01-01',
+            'payment_method_id': self.payment_method_manual_in.id,
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'amount': 1000,
+            'partner_id': partner.id or self.partner_agrolait.id,
+            'journal_id': journal.id or self.bank_journal_usd,
+        })
+        return payment
 
     def reconcile(self, liquidity_aml, amount=0.0, amount_currency=0.0, currency_id=None):
         """ Reconcile a journal entry corresponding to a payment with its bank statement line """
@@ -126,7 +142,7 @@ class TestPayment(AccountingTestCase):
             {'account_id': self.transfer_account.id, 'debit': 32.70, 'credit': 0.0, 'amount_currency': 50, 'currency_id': self.currency_usd_id},
             {'account_id': self.account_usd.id, 'debit': 0.0, 'credit': 32.70, 'amount_currency': -50, 'currency_id': self.currency_usd_id},
             {'account_id': self.transfer_account.id, 'debit': 0.0, 'credit': 32.70, 'amount_currency': -50, 'currency_id': self.currency_usd_id},
-            {'account_id': self.account_eur.id, 'debit': 32.70, 'credit': 0.0, 'amount_currency': 0, 'currency_id': False},
+            {'account_id': self.account_eur.id, 'debit': 32.70, 'credit': 0.0, 'amount_currency': 50, 'currency_id': self.currency_usd_id},
         ])
 
     def test_payment_chf_journal_usd(self):
@@ -533,3 +549,124 @@ class TestPayment(AccountingTestCase):
         self.assertEqual(name, move.name)
         self.assertTrue(transfer_move.name)
         self.assertNotEqual(name, transfer_move.name)
+
+    def test_partial_payment_inv_foreign_payment_domestic(self):
+        """
+            Invoice of 1000$ (foreign $) at 01/01 with foreign exchange rate of 0.50000
+            Payment of 500 (domestic €) at 15/01 with foreign exchange rate of 1.00000
+            The residuals should be 500 in foreign and 1500 in domestic.
+        """
+        company = self.env.ref('base.main_company')
+        self.env['res.currency.rate'].search([]).unlink()
+        self.env['res.currency.rate'].create({
+            'name': time.strftime('%Y') + '-01-01',
+            'rate': 1.0,
+            'currency_id': self.currency_eur_id,
+            'company_id': company.id
+        })
+        self.env['res.currency.rate'].create({
+            'name': time.strftime('%Y') + '-01-01',
+            'rate': 0.5,  # Don't change this !
+            'currency_id': self.currency_usd_id,
+            'company_id': self.env.ref('base.main_company').id
+        })
+        self.env['res.currency.rate'].create({
+            'name': time.strftime('%Y') + '-01-15',
+            'rate': 1.0,  # Don't change this !
+            'currency_id': self.currency_usd_id,
+            'company_id': self.env.ref('base.main_company').id
+        })
+        inv1 = self.env['account.move'].create({
+            'type': 'out_invoice',
+            'partner_id': self.partner_agrolait.id,
+            'currency_id': self.currency_usd_id,
+            'invoice_date': time.strftime('%Y') + '-01-01',
+            'date': time.strftime('%Y') + '-01-01',
+            'invoice_line_ids': [
+                (0, 0, {'product_id': self.product.id, 'quantity': 1, 'price_unit': 1000})
+            ],
+        })
+        inv1.post()
+        payment = self.payment_model.create({
+            'payment_date': time.strftime('%Y') + '-01-15',
+            'payment_method_id': self.payment_method_manual_in.id,
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': inv1.partner_id.id,
+            'amount': 500,
+            'journal_id': self.bank_journal_euro.id,
+            'company_id': company.id,
+            'currency_id': self.currency_eur_id,
+        })
+        payment.post()
+        inv1_receivable = inv1.line_ids.filtered(lambda l: l.account_id.internal_type == 'receivable')
+        pay_receivable = payment.move_line_ids.filtered(lambda l: l.account_id.internal_type == 'receivable')
+
+        self.assertEqual(inv1_receivable.balance, 2000)
+        self.assertEqual(pay_receivable.balance, -500)
+
+        (inv1_receivable + pay_receivable).reconcile()
+        self.assertEquals(inv1.amount_residual, 500)
+        self.assertEquals(inv1.amount_residual_signed, 1500)
+
+    def trigger_onchange_partner(self, payment):
+        payment_form = Form(payment)
+        payment_form.partner_id = payment_form.partner_id
+        payment_form.save()
+
+    def test_payment_onchange_partner_with_multi_company_bank_accounts(self):
+        """
+            When registering a payment, the partner bank account shouldn't be from an other company.
+            The result should be that a bank account from company B is :
+                - not used for a payment with company A
+                - is used for a payment with company B
+        """
+        company_a = self.env['res.company'].create({'name': 'Company A'})
+        bank_journal_a = self.env['account.journal'].create({
+            'name': "Company's journal",
+            'type': 'bank',
+            'code': 'a',
+            'company_id': company_a.id,
+        })
+        company_b = self.env['res.company'].create({'name': 'Company B'})
+        bank_journal_b = self.env['account.journal'].create({
+            'name': "Company's journal",
+            'type': 'bank',
+            'code': 'a',
+            'company_id': company_b.id,
+        })
+
+        # Case 1 : partner A has a commercial partner B with a bank account from company B
+        partner_b = self.env['res.partner'].create({'name': 'Partner B'})
+        partner_a = self.env['res.partner'].create({'name': 'Partner A'})
+        bank_account_b = self.env["res.partner.bank"].create({
+            "acc_number": "BE6853900754",
+            "bank_id": self.bank.id,
+            'partner_id': partner_b.id,
+            "company_id": company_b.id,
+        })
+        partner_a.commercial_partner_id = partner_b
+
+        payment_a = self.create_payment(partner_a, bank_journal_a)
+        self.trigger_onchange_partner(payment_a)
+        self.assertFalse(payment_a.partner_bank_account_id.id)
+
+        payment_b = self.create_payment(partner_a, bank_journal_b)
+        self.trigger_onchange_partner(payment_b)
+        self.assertEqual(payment_b.partner_bank_account_id.id, bank_account_b.id)
+
+        # Case 2 : partner C has a bank account from company B
+        partner_c = self.env['res.partner'].create({'name': 'Partner C'})
+        bank_account_c = self.env["res.partner.bank"].create({
+            "acc_number": "BE39103123456719",
+            "bank_id": self.bank.id,
+            "partner_id": partner_c.id,
+            "company_id": company_b.id,
+        })
+        payment_c = self.create_payment(partner_c, bank_journal_a)
+        self.trigger_onchange_partner(payment_c)
+        self.assertFalse(payment_c.partner_bank_account_id.id)
+
+        payment_d = self.create_payment(partner_c, bank_journal_b)
+        self.trigger_onchange_partner(payment_d)
+        self.assertEqual(payment_d.partner_bank_account_id.id, bank_account_c.id)

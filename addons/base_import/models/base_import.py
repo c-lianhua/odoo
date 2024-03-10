@@ -26,7 +26,7 @@ from odoo.tools.translate import _
 from odoo.tools.mimetypes import guess_mimetype
 from odoo.tools import config, DEFAULT_SERVER_DATE_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT, pycompat
 
-FIELDS_RECURSION_LIMIT = 2
+FIELDS_RECURSION_LIMIT = 3
 ERROR_PREVIEW_BYTES = 200
 DEFAULT_IMAGE_TIMEOUT = 3
 DEFAULT_IMAGE_MAXBYTES = 10 * 1024 * 1024
@@ -396,6 +396,7 @@ class Import(models.TransientModel):
             return ['boolean']
 
         # If all values can be cast to float, type is either float or monetary
+        results = []
         try:
             thousand_separator = decimal_separator = False
             for val in preview_values:
@@ -428,11 +429,11 @@ class Import(models.TransientModel):
             if thousand_separator and not options.get('float_decimal_separator'):
                 options['float_thousand_separator'] = thousand_separator
                 options['float_decimal_separator'] = decimal_separator
-            return ['float', 'monetary']
+            results = ['float', 'monetary']
         except ValueError:
             pass
 
-        results = self._try_match_date_time(preview_values, options)
+        results += self._try_match_date_time(preview_values, options)
         if results:
             return results
 
@@ -719,6 +720,16 @@ class Import(models.TransientModel):
             if not line[index]:
                 continue
             thousand_separator, decimal_separator = self._infer_separators(line[index], options)
+
+            if 'E' in line[index] or 'e' in line[index]:
+                tmp_value = line[index].replace(thousand_separator, '.')
+                try:
+                    tmp_value = '{:f}'.format(float(tmp_value))
+                    line[index] = tmp_value
+                    thousand_separator = ' '
+                except Exception:
+                    pass
+
             line[index] = line[index].replace(thousand_separator, '').replace(decimal_separator, '.')
             old_value = line[index]
             line[index] = self._remove_currency_symbol(line[index])
@@ -836,6 +847,7 @@ class Import(models.TransientModel):
         :rtype: bytes
         """
         maxsize = int(config.get("import_image_maxbytes", DEFAULT_IMAGE_MAXBYTES))
+        _logger.debug("Trying to import image from URL: %s into field %s, at line %s" % (url, field, line_number))
         try:
             response = session.get(url, timeout=int(config.get("import_image_timeout", DEFAULT_IMAGE_TIMEOUT)))
             response.raise_for_status()
@@ -858,6 +870,7 @@ class Import(models.TransientModel):
 
             return base64.b64encode(content)
         except Exception as e:
+            _logger.exception(e)
             raise ValueError(_("Could not retrieve URL: %(url)s [%(field_name)s: L%(line_number)d]: %(error)s") % {
                 'url': url,
                 'field_name': field,
@@ -935,9 +948,11 @@ class Import(models.TransientModel):
             for index, column_name in enumerate(columns):
                 if column_name:
                     # Update to latest selected field
-                    exist_records = BaseImportMapping.search([('res_model', '=', self.res_model), ('column_name', '=', column_name)])
-                    if exist_records:
-                        exist_records.write({'field_name': fields[index]})
+                    mapping_domain = [('res_model', '=', self.res_model), ('column_name', '=', column_name)]
+                    column_mapping = BaseImportMapping.search(mapping_domain, limit=1)
+                    if column_mapping:
+                        if column_mapping.field_name != fields[index]:
+                            column_mapping.field_name = fields[index]
                     else:
                         BaseImportMapping.create({
                             'res_model': self.res_model,

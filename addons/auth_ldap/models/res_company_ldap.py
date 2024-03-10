@@ -7,6 +7,7 @@ from ldap.filter import filter_format
 
 from odoo import _, api, fields, models, tools
 from odoo.exceptions import AccessDenied
+from odoo.tools.misc import str2bool
 from odoo.tools.pycompat import to_text
 
 _logger = logging.getLogger(__name__)
@@ -74,9 +75,28 @@ class CompanyLDAP(models.Model):
         uri = 'ldap://%s:%d' % (conf['ldap_server'], conf['ldap_server_port'])
 
         connection = ldap.initialize(uri)
+        ldap_chase_ref_disabled = self.env['ir.config_parameter'].sudo().get_param('auth_ldap.disable_chase_ref')
+        if str2bool(ldap_chase_ref_disabled):
+            connection.set_option(ldap.OPT_REFERRALS, ldap.OPT_OFF)
         if conf['ldap_tls']:
             connection.start_tls_s()
         return connection
+
+    def _get_entry(self, conf, login):
+        filter, dn, entry = False, False, False
+        try:
+            filter = filter_format(conf['ldap_filter'], (login,))
+        except TypeError:
+            _logger.warning('Could not format LDAP filter. Your filter should contain one \'%s\'.')
+        if filter:
+            results = self._query(conf, tools.ustr(filter))
+
+            # Get rid of (None, attrs) for searchResultReference replies
+            results = [i for i in results if i[0]]
+            if len(results) == 1:
+                entry = results[0]
+                dn = results[0][0]
+        return dn, entry
 
     def _authenticate(self, conf, login, password):
         """
@@ -95,27 +115,18 @@ class CompanyLDAP(models.Model):
         if not password:
             return False
 
-        entry = False
-        try:
-            filter = filter_format(conf['ldap_filter'], (login,))
-        except TypeError:
-            _logger.warning('Could not format LDAP filter. Your filter should contain one \'%s\'.')
+        dn, entry = self._get_entry(conf, login)
+        if not dn:
             return False
         try:
-            results = self._query(conf, tools.ustr(filter))
-
-            # Get rid of (None, attrs) for searchResultReference replies
-            results = [i for i in results if i[0]]
-            if len(results) == 1:
-                dn = results[0][0]
-                conn = self._connect(conf)
-                conn.simple_bind_s(dn, to_text(password))
-                conn.unbind()
-                entry = results[0]
+            conn = self._connect(conf)
+            conn.simple_bind_s(dn, to_text(password))
+            conn.unbind()
         except ldap.INVALID_CREDENTIALS:
             return False
         except ldap.LDAPError as e:
             _logger.error('An LDAP exception occurred: %s', e)
+            return False
         return entry
 
     def _query(self, conf, filter, retrieve_attributes=None):
@@ -200,3 +211,20 @@ class CompanyLDAP(models.Model):
                 return SudoUser.create(values).id
 
         raise AccessDenied(_("No local user found for LDAP login and not configured to create one"))
+
+    def _change_password(self, conf, login, old_passwd, new_passwd):
+        changed = False
+        dn, entry = self._get_entry(conf, login)
+        if not dn:
+            return False
+        try:
+            conn = self._connect(conf)
+            conn.simple_bind_s(dn, to_text(old_passwd))
+            conn.passwd_s(dn, old_passwd, new_passwd)
+            changed = True
+            conn.unbind()
+        except ldap.INVALID_CREDENTIALS:
+            pass
+        except ldap.LDAPError as e:
+            _logger.error('An LDAP exception occurred: %s', e)
+        return changed

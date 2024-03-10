@@ -4,6 +4,7 @@ import base64
 import hashlib
 import os
 
+from odoo.exceptions import AccessError
 from odoo.tests.common import TransactionCase
 
 HASH_SPLIT = 2      # FIXME: testing implementations detail is not a good idea
@@ -18,8 +19,8 @@ class TestIrAttachment(TransactionCase):
         # Blob1
         self.blob1 = b'blob1'
         self.blob1_b64 = base64.b64encode(self.blob1)
-        blob1_hash = hashlib.sha1(self.blob1).hexdigest()
-        self.blob1_fname = blob1_hash[:HASH_SPLIT] + '/' + blob1_hash
+        self.blob1_hash = hashlib.sha1(self.blob1).hexdigest()
+        self.blob1_fname = self.blob1_hash[:HASH_SPLIT] + '/' + self.blob1_hash
 
         # Blob2
         self.blob2 = b'blob2'
@@ -69,3 +70,141 @@ class TestIrAttachment(TransactionCase):
 
         a2_fn = os.path.join(self.filestore, a2_store_fname2)
         self.assertTrue(os.path.isfile(a2_fn))
+
+    def test_07_write_mimetype(self):
+        """
+        Tests the consistency of documents' mimetypes
+        """
+        Attachment = self.Attachment.with_user(self.env.ref('base.user_demo').id)
+        a2 = Attachment.create({'name': 'a2', 'datas': self.blob1_b64, 'mimetype': 'image/png'})
+        self.assertEqual(a2.mimetype, 'image/png', "the new mimetype should be the one given on write")
+        a3 = Attachment.create({'name': 'a3', 'datas': self.blob1_b64, 'mimetype': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'})
+        self.assertEqual(a3.mimetype, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', "should preserve office mime type")
+
+    def test_08_neuter_xml_mimetype(self):
+        """
+        Tests that potentially harmful mimetypes (XML mimetypes that can lead to XSS attacks) are converted to text
+        """
+        Attachment = self.Attachment.with_user(self.env.ref('base.user_demo').id)
+        document = Attachment.create({'name': 'document', 'datas': self.blob1_b64})
+        document.write({'datas': self.blob1_b64, 'mimetype': 'text/xml'})
+        self.assertEqual(document.mimetype, 'text/plain', "XML mimetype should be forced to text")
+        document.write({'datas': self.blob1_b64, 'mimetype': 'image/svg+xml'})
+        self.assertEqual(document.mimetype, 'text/plain', "SVG mimetype should be forced to text")
+        document.write({'datas': self.blob1_b64, 'mimetype': 'text/html'})
+        self.assertEqual(document.mimetype, 'text/plain', "HTML mimetype should be forced to text")
+        document.write({'datas': self.blob1_b64, 'mimetype': 'application/xhtml+xml'})
+        self.assertEqual(document.mimetype, 'text/plain', "XHTML mimetype should be forced to text")
+
+    def test_09_dont_neuter_xml_mimetype_for_admin(self):
+        """
+        Admin user does not have a mime type filter
+        """
+        document = self.Attachment.create({'name': 'document', 'datas': self.blob1_b64})
+        document.write({'datas': self.blob1_b64, 'mimetype': 'text/xml'})
+        self.assertEqual(document.mimetype, 'text/xml', "XML mimetype should not be forced to text, for admin user")
+
+    def test_10_copy(self):
+        """
+        Copying an attachment preserves the data
+        """
+        document = self.Attachment.create({'name': 'document', 'datas': self.blob2_b64})
+        document2 = document.copy({'name': "document (copy)"})
+        self.assertEqual(document2.name, "document (copy)")
+        self.assertEqual(document2.datas, document.datas)
+        self.assertEqual(document2.db_datas, document.db_datas)
+        self.assertEqual(document2.store_fname, document.store_fname)
+        self.assertEqual(document2.checksum, document.checksum)
+
+        document3 = document.copy({'datas': self.blob1_b64})
+        self.assertEqual(document3.datas, self.blob1_b64)
+        self.assertTrue(self.filestore)  # no data in db but has a store_fname
+        self.assertEqual(document3.db_datas, False)
+        self.assertEqual(document3.store_fname, self.blob1_fname)
+        self.assertEqual(document3.checksum, self.blob1_hash)
+
+
+class TestPermissions(TransactionCase):
+    def setUp(self):
+        super().setUp()
+        # replace self.env(uid=1) with an actual user environment so rules apply
+        self.env = self.env(user=self.env.ref('base.user_demo'))
+        self.Attachments = self.env['ir.attachment']
+
+        # create a record with an attachment and a rule allowing Read access
+        # but preventing Create, Update, or Delete
+        record = self.Attachments.create({'name': 'record1'})
+        self.vals = {'name': 'attach', 'res_id': record.id, 'res_model': record._name}
+        a = self.attachment = self.Attachments.create(self.vals)
+
+        # prevent create, write and unlink accesses on record
+        self.rule = self.env['ir.rule'].sudo().create({
+            'name': 'remove access to record %d' % record.id,
+            'model_id': self.env['ir.model']._get_id(record._name),
+            'domain_force': "[('id', '!=', %s)]" % record.id,
+            'perm_read': False
+        })
+        a.flush()
+        a.invalidate_cache(ids=a.ids)
+
+    def test_no_read_permission(self):
+        """If the record can't be read, the attachment can't be read either
+        """
+        # check that the information can be read out of the box
+        self.attachment.datas
+        # prevent read access on record
+        self.rule.perm_read = True
+        self.attachment.invalidate_cache(ids=self.attachment.ids)
+        with self.assertRaises(AccessError):
+            self.attachment.datas
+
+    def test_with_write_permissions(self):
+        """With write permissions to the linked record, attachment can be
+        created, updated, or deleted (or copied).
+        """
+        # enable write permission on linked record
+        self.rule.perm_write = False
+        attachment = self.Attachments.create(self.vals)
+        attachment.copy()
+        attachment.write({'datas': b'NDIw'})
+        attachment.unlink()
+
+    def test_basic_modifications(self):
+        """Lacking write access to the linked record means create, update, and
+        delete on the attachment are forbidden
+        """
+        with self.assertRaises(AccessError):
+            self.Attachments.create(self.vals)
+        with self.assertRaises(AccessError):
+            self.attachment.write({'datas': b'NDIw'})
+        with self.assertRaises(AccessError):
+            self.attachment.unlink()
+        with self.assertRaises(AccessError):
+            self.attachment.copy()
+
+    def test_cross_record_copies(self):
+        """Copying attachments between records (in the same model or not) adds
+        wrinkles as the ACLs may diverge a lot more
+        """
+        # create an other unwritable record in a different model
+        unwritable = self.env['res.users.log'].create({})
+        with self.assertRaises(AccessError):
+            unwritable.write({})  # checks unwritability
+        # create a writable record in the same model
+        writable = self.Attachments.create({'name': 'yes'})
+        writable.name = 'canwrite'  # checks for writeability
+
+        # can copy from a record with read permissions to one with write permissions
+        copied = self.attachment.copy({'res_model': writable._name, 'res_id': writable.id})
+        # can copy to self given write permission
+        copied.copy()
+        # can not copy back to record without write permission
+        with self.assertRaises(AccessError):
+            copied.copy({'res_id': self.vals['res_id']})
+
+        # can not copy to a record without write permission
+        with self.assertRaises(AccessError):
+            self.attachment.copy({'res_model': unwritable._name, 'res_id': unwritable.id})
+        # even from a record with write permissions
+        with self.assertRaises(AccessError):
+            copied.copy({'res_model': unwritable._name, 'res_id': unwritable.id})

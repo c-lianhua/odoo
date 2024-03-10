@@ -1,6 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, RedirectWarning, ValidationError
 from dateutil.relativedelta import relativedelta
 from lxml import etree
 import logging
@@ -11,8 +11,8 @@ class AccountMove(models.Model):
 
     _inherit = 'account.move'
 
-    @staticmethod
-    def _l10n_ar_get_document_number_parts(document_number, document_type_code):
+    @api.model
+    def _l10n_ar_get_document_number_parts(self, document_number, document_type_code):
         # import shipments
         if document_type_code in ['66', '67']:
             pos = invoice_number = '0'
@@ -25,7 +25,7 @@ class AccountMove(models.Model):
         ' identify the type of responsibilities that a person or a legal entity could have and that impacts in the'
         ' type of operations and requirements they need.')
 
-    l10n_ar_currency_rate = fields.Float(copy=False, digits=(16, 4), readonly=True, string="Currency Rate")
+    l10n_ar_currency_rate = fields.Float(copy=False, digits=(16, 6), readonly=True, string="Currency Rate")
 
     # Mostly used on reports
     l10n_ar_afip_concept = fields.Selection(
@@ -34,6 +34,27 @@ class AccountMove(models.Model):
         " different type if required.")
     l10n_ar_afip_service_start = fields.Date(string='AFIP Service Start Date', readonly=True, states={'draft': [('readonly', False)]})
     l10n_ar_afip_service_end = fields.Date(string='AFIP Service End Date', readonly=True, states={'draft': [('readonly', False)]})
+
+    @api.constrains('type', 'journal_id')
+    def _check_moves_use_documents(self):
+        """ Do not let to create not invoices entries in journals that use documents """
+        not_invoices = self.filtered(lambda x: x.company_id.country_id == self.env.ref('base.ar') and x.journal_id.type in ['sale', 'purchase'] and x.l10n_latam_use_documents and not x.is_invoice())
+        if not_invoices:
+            raise ValidationError(_("The selected Journal can't be used in this transaction, please select one that doesn't use documents as these are just for Invoices."))
+
+    @api.constrains('type', 'l10n_latam_document_type_id')
+    def _check_invoice_type_document_type(self):
+        """ LATAM module define that we are not able to use debit_note or invoice document types in an invoice refunds,
+        However for Argentinian Document Type's 99 (internal type = invoice) we are able to used in a refund invoices.
+
+        In this method we exclude the argentinian documents that can be used as invoice and refund from the generic
+        constraint """
+        docs_used_for_inv_and_ref = self.filtered(
+            lambda x: x.l10n_latam_country_code == 'AR' and
+            x.l10n_latam_document_type_id.code in self._get_l10n_ar_codes_used_for_inv_and_ref() and
+            x.type in ['out_refund', 'in_refund'])
+
+        super(AccountMove, self - docs_used_for_inv_and_ref)._check_invoice_type_document_type()
 
     def _get_afip_invoice_concepts(self):
         """ Return the list of values of the selection field. """
@@ -67,6 +88,13 @@ class AccountMove(models.Model):
             afip_concept = '3'
         return afip_concept
 
+    @api.model
+    def _get_l10n_ar_codes_used_for_inv_and_ref(self):
+        """ List of document types that can be used as an invoice and refund. This list can be increased once needed
+        and demonstrated. As far as we've checked document types of wsfev1 don't allow negative amounts so, for example
+        document 60 and 61 could not be used as refunds. """
+        return ['99', '186', '188', '189']
+
     def _get_l10n_latam_documents_domain(self):
         self.ensure_one()
         domain = super()._get_l10n_latam_documents_domain()
@@ -76,6 +104,8 @@ class AccountMove(models.Model):
             codes = self.journal_id._get_journal_codes()
             if codes:
                 domain.append(('code', 'in', codes))
+            if self.type == 'in_refund':
+                domain = ['|', ('code', 'in', self._get_l10n_ar_codes_used_for_inv_and_ref())] + domain
         return domain
 
     def _check_argentinian_invoice_taxes(self):
@@ -89,7 +119,7 @@ class AccountMove(models.Model):
             for line in inv.mapped('invoice_line_ids').filtered(lambda x: x.display_type not in ('line_section', 'line_note')):
                 vat_taxes = line.tax_ids.filtered(lambda x: x.tax_group_id.l10n_ar_vat_afip_code)
                 if len(vat_taxes) != 1:
-                    raise UserError(_('There must be one and only one VAT tax per line. Check line "%s"') % line.name)
+                    raise UserError(_('There should be a single tax from the "VAT" tax group per line, add it to "%s". If you already have it, please check the tax configuration, in advanced options, in the corresponding field "Tax Group".') % line.name)
                 elif purchase_aliquots == 'zero' and vat_taxes.tax_group_id.l10n_ar_vat_afip_code != '0':
                     raise UserError(_('On invoice id "%s" you must use VAT Not Applicable on every line.')  % inv.id)
                 elif purchase_aliquots == 'not_zero' and vat_taxes.tax_group_id.l10n_ar_vat_afip_code == '0':
@@ -101,6 +131,16 @@ class AccountMove(models.Model):
                 rec.l10n_ar_afip_service_start = rec.invoice_date + relativedelta(day=1)
             if not rec.l10n_ar_afip_service_end:
                 rec.l10n_ar_afip_service_end = rec.invoice_date + relativedelta(day=1, days=-1, months=+1)
+
+    def _set_afip_rate(self):
+        """ We set the l10n_ar_currency_rate value with the accounting date. This should be done
+        after invoice has been posted in order to have the proper accounting date"""
+        for rec in self:
+            if rec.company_id.currency_id == rec.currency_id:
+                rec.l10n_ar_currency_rate = 1.0
+            elif not rec.l10n_ar_currency_rate:
+                rec.l10n_ar_currency_rate = rec.currency_id._convert(
+                    1.0, rec.company_id.currency_id, rec.company_id, rec.date, round=False)
 
     @api.onchange('partner_id')
     def _onchange_afip_responsibility(self):
@@ -132,31 +172,35 @@ class AccountMove(models.Model):
             res_code = rec.partner_id.l10n_ar_afip_responsibility_type_id.code
             domain = [('company_id', '=', rec.company_id.id), ('l10n_latam_use_documents', '=', True), ('type', '=', 'sale')]
             journal = self.env['account.journal']
-            if res_code in ['8', '9', '10'] and rec.journal_id.l10n_ar_afip_pos_system not in expo_journals:
+            partner_type = journal_type = False
+            if res_code in ['9', '10'] and rec.journal_id.l10n_ar_afip_pos_system not in expo_journals:
                 # if partner is foregin and journal is not of expo, we try to change to expo journal
                 journal = journal.search(domain + [('l10n_ar_afip_pos_system', 'in', expo_journals)], limit=1)
-            elif res_code not in ['8', '9', '10'] and rec.journal_id.l10n_ar_afip_pos_system in expo_journals:
+                partner_type, journal_type = (_('foreign partner'), _('exportation'))
+            elif res_code not in ['9', '10'] and rec.journal_id.l10n_ar_afip_pos_system in expo_journals:
                 # if partner is NOT foregin and journal is for expo, we try to change to local journal
                 journal = journal.search(domain + [('l10n_ar_afip_pos_system', 'not in', expo_journals)], limit=1)
+                partner_type, journal_type = (_('domestic partner'), _('domestic market'))
             if journal:
                 rec.journal_id = journal.id
+            elif partner_type and journal_type:
+                # Throw an error to user in order to proper configure the journal for the type of operation
+                action = self.env.ref('account.action_account_journal_form')
+                msg = _('You are trying to create an invoice for %s but you dont have an %s journal') % (
+                    partner_type, journal_type)
+                raise RedirectWarning(msg, action.id, _('Go to Journals'))
 
     def post(self):
         ar_invoices = self.filtered(lambda x: x.company_id.country_id == self.env.ref('base.ar') and x.l10n_latam_use_documents)
         for rec in ar_invoices:
             rec.l10n_ar_afip_responsibility_type_id = rec.commercial_partner_id.l10n_ar_afip_responsibility_type_id.id
-            if rec.company_id.currency_id == rec.currency_id:
-                l10n_ar_currency_rate = 1.0
-            else:
-                l10n_ar_currency_rate = rec.currency_id._convert(
-                    1.0, rec.company_id.currency_id, rec.company_id, rec.invoice_date or fields.Date.today(), round=False)
-            rec.l10n_ar_currency_rate = l10n_ar_currency_rate
 
         # We make validations here and not with a constraint because we want validation before sending electronic
         # data on l10n_ar_edi
         ar_invoices._check_argentinian_invoice_taxes()
         res = super().post()
-        self._set_afip_service_dates()
+        ar_invoices._set_afip_rate()
+        ar_invoices._set_afip_service_dates()
         return res
 
     def _reverse_moves(self, default_values_list=None, cancel=False):
@@ -168,3 +212,81 @@ class AccountMove(models.Model):
                 'l10n_ar_afip_service_end': move.l10n_ar_afip_service_end,
             })
         return super()._reverse_moves(default_values_list=default_values_list, cancel=cancel)
+
+    def _l10n_ar_get_amounts(self, company_currency=False):
+        """ Method used to prepare data to present amounts and taxes related amounts when creating an
+        electronic invoice for argentinian and the txt files for digital VAT books. Only take into account the argentinian taxes """
+        self.ensure_one()
+        amount_field = company_currency and 'balance' or 'price_subtotal'
+        # if we use balance we need to correct sign (on price_subtotal is positive for refunds and invoices)
+        sign = -1 if (company_currency and self.is_inbound()) else 1
+
+        # if we are on a document that works invoice and refund and it's a refund, we need to export it as negative
+        sign = -sign if self.type in ('out_refund', 'in_refund') and\
+            self.l10n_latam_document_type_id.code in self._get_l10n_ar_codes_used_for_inv_and_ref() else sign
+
+        tax_lines = self.line_ids.filtered('tax_line_id')
+        vat_taxes = tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_vat_afip_code)
+
+        vat_taxable = self.env['account.move.line']
+        for line in self.invoice_line_ids:
+            if any(tax.tax_group_id.l10n_ar_vat_afip_code and tax.tax_group_id.l10n_ar_vat_afip_code not in ['0', '1', '2'] for tax in line.tax_ids):
+                vat_taxable |= line
+
+        profits_tax_group = self.env.ref('l10n_ar.tax_group_percepcion_ganancias')
+        return {'vat_amount': sign * sum(vat_taxes.mapped(amount_field)),
+                # For invoices of letter C should not pass VAT
+                'vat_taxable_amount': sign * sum(vat_taxable.mapped(amount_field)) if self.l10n_latam_document_type_id.l10n_ar_letter != 'C' else self.amount_untaxed,
+                'vat_exempt_base_amount': sign * sum(self.invoice_line_ids.filtered(lambda x: x.tax_ids.filtered(lambda y: y.tax_group_id.l10n_ar_vat_afip_code == '2')).mapped(amount_field)),
+                'vat_untaxed_base_amount': sign * sum(self.invoice_line_ids.filtered(lambda x: x.tax_ids.filtered(lambda y: y.tax_group_id.l10n_ar_vat_afip_code == '1')).mapped(amount_field)),
+                # used on FE
+                'not_vat_taxes_amount': sign * sum((tax_lines - vat_taxes).mapped(amount_field)),
+                # used on BFE + TXT
+                'iibb_perc_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_tribute_afip_code == '07').mapped(amount_field)),
+                'mun_perc_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_tribute_afip_code == '08').mapped(amount_field)),
+                'intern_tax_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_tribute_afip_code == '04').mapped(amount_field)),
+                'other_taxes_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_tribute_afip_code == '99').mapped(amount_field)),
+                'profits_perc_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id == profits_tax_group).mapped(amount_field)),
+                'vat_perc_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_tribute_afip_code == '06').mapped(amount_field)),
+                'other_perc_amount': sign * sum(tax_lines.filtered(lambda r: r.tax_line_id.tax_group_id.l10n_ar_tribute_afip_code == '09' and r.tax_line_id.tax_group_id != profits_tax_group).mapped(amount_field)),
+                }
+
+    def _get_vat(self, company_currency=False):
+        """ Applies on wsfe web service and in the VAT digital books """
+        amount_field = company_currency and 'balance' or 'price_subtotal'
+        # if we use balance we need to correct sign (on price_subtotal is positive for refunds and invoices)
+        sign = -1 if (company_currency and self.is_inbound()) else 1
+
+        # if we are on a document that works invoice and refund and it's a refund, we need to export it as negative
+        sign = -sign if self.type in ('out_refund', 'in_refund') and\
+            self.l10n_latam_document_type_id.code in self._get_l10n_ar_codes_used_for_inv_and_ref() else sign
+
+        res = []
+        vat_taxable = self.env['account.move.line']
+        # get all invoice lines that are vat taxable
+        for line in self.line_ids:
+            if any(tax.tax_group_id.l10n_ar_vat_afip_code and tax.tax_group_id.l10n_ar_vat_afip_code not in ['0', '1', '2'] for tax in line.tax_line_id) and line[amount_field]:
+                vat_taxable |= line
+        for tax_group in vat_taxable.mapped('tax_group_id'):
+            base_imp = sum(self.invoice_line_ids.filtered(lambda x: x.tax_ids.filtered(lambda y: y.tax_group_id.l10n_ar_vat_afip_code == tax_group.l10n_ar_vat_afip_code)).mapped(amount_field))
+            imp = sum(vat_taxable.filtered(lambda x: x.tax_group_id.l10n_ar_vat_afip_code == tax_group.l10n_ar_vat_afip_code).mapped(amount_field))
+            res += [{'Id': tax_group.l10n_ar_vat_afip_code,
+                     'BaseImp': sign * base_imp,
+                     'Importe': sign * imp}]
+
+        # Report vat 0%
+        vat_base_0 = sign * sum(self.invoice_line_ids.filtered(lambda x: x.tax_ids.filtered(lambda y: y.tax_group_id.l10n_ar_vat_afip_code == '3')).mapped(amount_field))
+        if vat_base_0:
+            res += [{'Id': '3', 'BaseImp': vat_base_0, 'Importe': 0.0}]
+
+        return res if res else []
+
+    def _get_name_invoice_report(self, report_xml_id):
+        self.ensure_one()
+        if self.l10n_latam_use_documents and self.company_id.country_id.code == 'AR':
+            custom_report = {
+                'account.report_invoice_document_with_payments': 'l10n_ar.report_invoice_document_with_payments',
+                'account.report_invoice_document': 'l10n_ar.report_invoice_document',
+            }
+            return custom_report.get(report_xml_id) or report_xml_id
+        return super()._get_name_invoice_report(report_xml_id)

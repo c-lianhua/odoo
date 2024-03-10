@@ -35,16 +35,30 @@ class HrEmployeeBase(models.AbstractModel):
                 employee.hr_presence_state = 'present'
 
     def _compute_hours_last_month(self):
+        now = fields.Datetime.now()
+        now_utc = pytz.utc.localize(now)
         for employee in self:
-            now = datetime.now()
-            start = now + relativedelta(months=-1, day=1)
-            end = now + relativedelta(days=-1, day=1)
+            tz = pytz.timezone(employee.tz)
+            now_tz = now_utc.astimezone(tz)
+            start_tz = now_tz + relativedelta(months=-1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_naive = start_tz.astimezone(pytz.utc).replace(tzinfo=None)
+            end_tz = now_tz + relativedelta(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_naive = end_tz.astimezone(pytz.utc).replace(tzinfo=None)
+
             attendances = self.env['hr.attendance'].search([
                 ('employee_id', '=', employee.id),
-                ('check_in', '>=', start),
-                ('check_out', '<=', end),
+                '&',
+                ('check_in', '<=', end_naive),
+                ('check_out', '>=', start_naive),
             ])
-            employee.hours_last_month = sum(attendances.mapped('worked_hours'))
+
+            hours = 0
+            for attendance in attendances:
+                check_in = max(attendance.check_in, start_naive)
+                check_out = min(attendance.check_out, end_naive)
+                hours += (check_out - check_in).total_seconds() / 3600.0
+
+            employee.hours_last_month = round(hours, 2)
             employee.hours_last_month_display = "%g" % employee.hours_last_month
 
     def _compute_hours_today(self):
@@ -94,7 +108,10 @@ class HrEmployeeBase(models.AbstractModel):
 
     def attendance_manual(self, next_action, entered_pin=None):
         self.ensure_one()
-        can_check_without_pin = not self.env.user.has_group('hr_attendance.group_hr_attendance_use_pin') or (self.user_id == self.env.user and entered_pin is None)
+        attendance_user_and_no_pin = self.user_has_groups(
+            'hr_attendance.group_hr_attendance_user,'
+            '!hr_attendance.group_hr_attendance_use_pin')
+        can_check_without_pin = attendance_user_and_no_pin or (self.user_id == self.env.user and entered_pin is None)
         if can_check_without_pin or entered_pin is not None and entered_pin == self.sudo().pin:
             return self._attendance_action(next_action)
         return {'warning': _('Wrong PIN')}

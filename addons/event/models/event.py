@@ -3,7 +3,7 @@
 import logging
 import pytz
 
-from odoo import _, api, fields, models
+from odoo import _, api, fields, models, SUPERUSER_ID
 from odoo.tools import format_datetime
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tools.translate import html_translate
@@ -27,15 +27,18 @@ class EventType(models.Model):
     @api.model
     def _get_default_event_type_mail_ids(self):
         return [(0, 0, {
+            'notification_type': 'mail',
             'interval_unit': 'now',
             'interval_type': 'after_sub',
             'template_id': self.env.ref('event.event_subscription').id,
         }), (0, 0, {
+            'notification_type': 'mail',
             'interval_nbr': 1,
             'interval_unit': 'days',
             'interval_type': 'before_event',
             'template_id': self.env.ref('event.event_reminder').id,
         }), (0, 0, {
+            'notification_type': 'mail',
             'interval_nbr': 10,
             'interval_unit': 'days',
             'interval_type': 'before_event',
@@ -141,7 +144,7 @@ class EventEvent(models.Model):
         store=True, readonly=True, compute='_compute_seats')
     seats_expected = fields.Integer(
         string='Number of Expected Attendees',
-        compute_sudo=True, readonly=True, compute='_compute_seats')
+        compute_sudo=True, readonly=True, compute='_compute_seats_expected')
 
     # Registration fields
     registration_ids = fields.One2many(
@@ -191,6 +194,13 @@ class EventEvent(models.Model):
         for event in self:
             event.seats_unconfirmed = event.seats_reserved = event.seats_used = event.seats_available = 0
         # aggregate registrations by event and by state
+        state_field = {
+            'draft': 'seats_unconfirmed',
+            'open': 'seats_reserved',
+            'done': 'seats_used',
+        }
+        base_vals = dict((fname, 0) for fname in state_field.values())
+        results = dict((event_id, dict(base_vals)) for event_id in self.ids)
         if self.ids:
             state_field = {
                 'draft': 'seats_unconfirmed',
@@ -205,12 +215,16 @@ class EventEvent(models.Model):
             self.env['event.registration'].flush(['event_id', 'state'])
             self._cr.execute(query, (tuple(self.ids),))
             for event_id, state, num in self._cr.fetchall():
-                event = self.browse(event_id)
-                event[state_field[state]] += num
-        # compute seats_available
+                results[event_id][state_field[state]] += num
+
         for event in self:
+            event.update(results.get(event._origin.id or event.id, base_vals))
             if event.seats_max > 0:
                 event.seats_available = event.seats_max - (event.seats_reserved + event.seats_used)
+
+    @api.depends('seats_unconfirmed', 'seats_reserved', 'seats_used')
+    def _compute_seats_expected(self):
+        for event in self:
             event.seats_expected = event.seats_unconfirmed + event.seats_reserved + event.seats_used
 
     @api.model
@@ -270,11 +284,11 @@ class EventEvent(models.Model):
             self.is_online = self.event_type_id.is_online
 
             if self.event_type_id.event_type_mail_ids:
-                self.event_mail_ids = [(5, 0, 0)] + [(0, 0, {
-                    'template_id': line.template_id,
-                    'interval_nbr': line.interval_nbr,
-                    'interval_unit': line.interval_unit,
-                    'interval_type': line.interval_type})
+                self.event_mail_ids = [(5, 0, 0)] + [
+                    (0, 0, {
+                        attribute_name: line[attribute_name] if not isinstance(line[attribute_name], models.BaseModel) else line[attribute_name].id
+                        for attribute_name in self.env['event.type.mail']._get_event_mail_fields_whitelist()
+                        })
                     for line in self.event_type_id.event_type_mail_ids]
 
     @api.constrains('seats_min', 'seats_max', 'seats_availability')
@@ -428,6 +442,18 @@ class EventRegistration(models.Model):
         return registration
 
     @api.model
+    def check_access_rights(self, operation, raise_exception=True):
+        if operation == 'read' and not self.env.is_admin() and not self.user_has_groups('base.group_user'):
+            if raise_exception:
+                raise AccessError(_('Only internal users are allowed to read registrations.'))
+            return False
+        elif operation != 'read' and not self.env.is_admin() and not self.user_has_groups('event.group_event_user'):
+            if raise_exception:
+                raise AccessError(_('Only event users or managers are allowed to create or update registrations.'))
+            return False
+        return super(EventRegistration, self).check_access_rights(operation, raise_exception)
+
+    @api.model
     def _prepare_attendee_values(self, registration):
         """ Method preparing the values to create new attendees based on a
         sales order line. It takes some registration data (dict-based) that are
@@ -443,7 +469,11 @@ class EventRegistration(models.Model):
             'partner_id': partner_id.id,
             'event_id': event_id and event_id.id or False,
         }
-        data.update({key: value for key, value in registration.items() if key in self._fields})
+        data.update({
+            key: value for key, value in registration.items()
+            if key in self._fields and key not in data and not self._fields[key].default
+        })
+
         return data
 
     def do_draft(self):
@@ -455,7 +485,7 @@ class EventRegistration(models.Model):
         # auto-trigger after_sub (on subscribe) mail schedulers, if needed
         onsubscribe_schedulers = self.event_id.event_mail_ids.filtered(
             lambda s: s.interval_type == 'after_sub')
-        onsubscribe_schedulers.execute()
+        onsubscribe_schedulers.with_user(SUPERUSER_ID).execute()
 
     def button_reg_close(self):
         """ Close Registration """

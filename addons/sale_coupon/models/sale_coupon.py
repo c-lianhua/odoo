@@ -33,7 +33,7 @@ class SaleCoupon(models.Model):
         ('expired', 'Expired')
         ], required=True, default='new')
     partner_id = fields.Many2one('res.partner', "For Customer")
-    program_id = fields.Many2one('sale.coupon.program', "Program")
+    program_id = fields.Many2one('sale.coupon.program', "Program", required=True, ondelete="cascade")
     order_id = fields.Many2one('sale.order', 'Order Reference', readonly=True,
         help="The sales order from which coupon is generated")
     sales_order_id = fields.Many2one('sale.order', 'Applied on order', readonly=True,
@@ -46,6 +46,7 @@ class SaleCoupon(models.Model):
     ]
 
     def _compute_expiration_date(self):
+        self.expiration_date = 0
         for coupon in self.filtered(lambda x: x.program_id.validity_duration > 0):
             coupon.expiration_date = (coupon.create_date + relativedelta(days=coupon.program_id.validity_duration)).date()
 
@@ -53,7 +54,7 @@ class SaleCoupon(models.Model):
         message = {}
         applicable_programs = order._get_applicable_programs()
         if self.state in ('used', 'expired') or \
-           (self.expiration_date and self.expiration_date < order.date_order.date()):
+           (self.expiration_date and self.expiration_date < fields.Datetime.now().date()):
             message = {'error': _('This coupon %s has been used or is expired.') % (self.code)}
         elif self.state == 'reserved':
             message = {'error': _('This coupon %s exists but the origin sales order is not validated yet.') % (self.code)}
@@ -66,6 +67,8 @@ class SaleCoupon(models.Model):
             message = {'error': _('Invalid partner.')}
         elif self.program_id in order.applied_coupon_ids.mapped('program_id'):
             message = {'error': _('A Coupon is already applied for the same reward')}
+        elif order.code_promo_program_id.reward_type == self.program_id.reward_type == 'free_shipping':
+            message = {'error': _('Free shipping has already been applied.')}
         elif self.program_id._is_global_discount_program() and order._is_global_discount_already_applied():
             message = {'error': _('Global discounts are not cumulable.')}
         elif self.program_id.reward_type == 'product' and not order._is_reward_in_order_lines(self.program_id):
@@ -105,3 +108,14 @@ class SaleCoupon(models.Model):
             'target': 'new',
             'context': ctx,
         }
+
+    def cron_expire_coupon(self):
+        self._cr.execute("""
+            SELECT C.id FROM SALE_COUPON as C
+            INNER JOIN SALE_COUPON_PROGRAM as P ON C.program_id = P.id
+            WHERE C.STATE in ('reserved', 'new')
+                AND P.validity_duration > 0
+                AND C.create_date + interval '1 day' * P.validity_duration < now()""")
+
+        expired_ids = [res[0] for res in self._cr.fetchall()]
+        self.browse(expired_ids).write({'state': 'expired'})

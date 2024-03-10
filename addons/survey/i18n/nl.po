@@ -7,17 +7,18 @@
 # Cas Vissers <casvissers@brahoo.nl>, 2019
 # Maxim Vandenbroucke <mxv@odoo.com>, 2019
 # Charles Vervaecke <cvk@odoo.com>, 2019
-# Martin Trigaux, 2019
-# Erwin van der Ploeg <erwin@odooexperts.nl>, 2019
 # Yenthe Van Ginneken <yenthespam@gmail.com>, 2019
+# Antoine Gilard <ang@odoo.com>, 2020
+# Martin Trigaux, 2021
+# Erwin van der Ploeg <erwin@odooexperts.nl>, 2021
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-10-07 07:13+0000\n"
+"POT-Creation-Date: 2019-12-05 12:34+0000\n"
 "PO-Revision-Date: 2019-08-26 09:14+0000\n"
-"Last-Translator: Yenthe Van Ginneken <yenthespam@gmail.com>, 2019\n"
+"Last-Translator: Erwin van der Ploeg <erwin@odooexperts.nl>, 2021\n"
 "Language-Team: Dutch (https://www.transifex.com/odoo/teams/41243/nl/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -195,7 +196,7 @@ msgstr ""
 "            </a>\n"
 "        </div>\n"
 "        % if object.deadline:\n"
-"            Gelieve de enquête te beantwoorden voor ${format_date(object.deadline)}.<br/><br/>\n"
+"            Wilt u de enquête beantwoorden voor ${format_date(object.deadline)}.<br/><br/>\n"
 "        % endif\n"
 "        Bedankt voor uw deelname.\n"
 "    </p>\n"
@@ -639,6 +640,7 @@ msgid "Appears in"
 msgstr "Komt voor in"
 
 #. module: survey
+#: model_terms:ir.ui.view,arch_db:survey.survey_form
 #: model_terms:ir.ui.view,arch_db:survey.survey_survey_view_search
 msgid "Archived"
 msgstr "Gearchiveerd"
@@ -780,6 +782,7 @@ msgstr "Certificeringsdocument"
 #: model:ir.model.constraint,message:survey.constraint_survey_survey_give_badge_check
 msgid "Certification badge must be configured if Give Badge is set."
 msgstr ""
+"Certificeringsbadge moet worden geconfigureerd als Geef Badge is ingesteld."
 
 #. module: survey
 #: model:mail.template,subject:survey.mail_template_certification
@@ -889,7 +892,7 @@ msgstr "Opmerkingen bericht"
 #: model:ir.model.fields,field_description:survey.field_res_partner__certifications_company_count
 #: model:ir.model.fields,field_description:survey.field_res_users__certifications_company_count
 msgid "Company Certifications Count"
-msgstr ""
+msgstr "Bedrijf certificeringen teller"
 
 #. module: survey
 #: model:ir.model.fields.selection,name:survey.selection__survey_user_input__state__done
@@ -1046,7 +1049,7 @@ msgstr "Datum mislukt:"
 #: model:ir.model.fields.selection,name:survey.selection__survey_question__question_type__datetime
 #: model:ir.model.fields.selection,name:survey.selection__survey_user_input_line__answer_type__datetime
 msgid "Datetime"
-msgstr "Datetime"
+msgstr "Datum/Tijd"
 
 #. module: survey
 #: model:ir.model.fields,field_description:survey.field_survey_user_input_line__value_datetime
@@ -1206,12 +1209,7 @@ msgstr "Foutmelding"
 #. module: survey
 #: model_terms:ir.ui.view,arch_db:survey.survey_user_input_view_search
 msgid "Except Test Entries"
-msgstr ""
-
-#. module: survey
-#: model_terms:ir.ui.view,arch_db:survey.survey_survey_view_search
-msgid "Exception Activities"
-msgstr "Uitzondering activiteiten"
+msgstr "Uitzondering test boekingen"
 
 #. module: survey
 #: model:ir.model.fields,field_description:survey.field_survey_invite__existing_partner_ids
@@ -1440,7 +1438,7 @@ msgstr ""
 #. module: survey
 #: model_terms:ir.ui.view,arch_db:survey.sfinished
 msgid "If you wish, you can"
-msgstr "Als je wenst kan je"
+msgstr "Als u wenst, kunt u"
 
 #. module: survey
 #: model:survey.label,value:survey.survey_feedback_p2_q1_sug6
@@ -1466,7 +1464,7 @@ msgstr "Invoer moet een e-mail zijn"
 #: code:addons/survey/models/survey_survey.py:0
 #, python-format
 msgid "Invalid performance computation"
-msgstr "Foutieve performantieberekening"
+msgstr "Foutieve prestatieberekening"
 
 #. module: survey
 #: model:ir.model.fields.selection,name:survey.selection__survey_user_input__input_type__link
@@ -1734,12 +1732,12 @@ msgstr "Meerkeuze met één antwoord"
 #. module: survey
 #: model:ir.model.fields.selection,name:survey.selection__survey_question__question_type__multiple_choice
 msgid "Multiple choice: multiple answers allowed"
-msgstr "Meerkeuze: meerdere antwoorden toegestaan"
+msgstr "Meerkeuze: meerdere antwoorden"
 
 #. module: survey
 #: model:ir.model.fields.selection,name:survey.selection__survey_question__question_type__simple_choice
 msgid "Multiple choice: only one answer"
-msgstr "Meerkeuze: maar een antwoord"
+msgstr "Meerkeuze: maar één antwoord"
 
 #. module: survey
 #: model:ir.model.fields.selection,name:survey.selection__survey_question__matrix_subtype__multiple
@@ -1960,7 +1958,7 @@ msgstr "Uitgaande mailserver"
 #: code:addons/survey/static/src/js/survey_result.js:0
 #, python-format
 msgid "Overall Performance %.2f%s"
-msgstr "Algemene performantie %.2f%s"
+msgstr "Algemene prestatie %.2f%s"
 
 #. module: survey
 #: model:survey.label,value:survey.survey_feedback_p2_q1_sug5
@@ -2029,6 +2027,8 @@ msgid ""
 "Please make sure you have at least one question in your survey. You also "
 "need at least one section if you chose the \"Page per section\" layout.<br/>"
 msgstr ""
+"Zorg ervoor dat u ten minste één vraag in uw enquête heeft. U hebt ook ten "
+"minste één sectie nodig als u de lay-out \"Pagina per sectie\" kiest.<br/>"
 
 #. module: survey
 #: model:survey.label,value:survey.survey_feedback_p2_q1_sug8
@@ -2230,7 +2230,7 @@ msgstr "Score voor deze keuze"
 #: model:ir.model.fields,field_description:survey.field_survey_user_input__scoring_type
 #: model_terms:ir.ui.view,arch_db:survey.survey_form
 msgid "Scoring"
-msgstr "Scoort"
+msgstr "Scoring"
 
 #. module: survey
 #: model:ir.model.fields,field_description:survey.field_survey_question__scoring_type
@@ -2598,7 +2598,7 @@ msgstr "Test uw kennis van uw producten!"
 #. module: survey
 #: model_terms:survey.survey,description:survey.vendor_certification
 msgid "Test your vendor skills!"
-msgstr ""
+msgstr "Test uw leveranciersvaardigheden!"
 
 #. module: survey
 #: model:ir.model.fields.selection,name:survey.selection__survey_user_input_line__answer_type__text
@@ -2671,12 +2671,29 @@ msgid "The checkout process is clear and secure"
 msgstr "Het checkout proces is duidelijk en veilig"
 
 #. module: survey
+#. openerp-web
+#: code:addons/survey/static/src/js/survey.js:0
+#, python-format
+msgid "The date you selected is greater than the maximum date: "
+msgstr "De gekozen datum is groter dan de maximale datum:"
+
+#. module: survey
+#. openerp-web
+#: code:addons/survey/static/src/js/survey.js:0
+#, python-format
+msgid "The date you selected is lower than the minimum date: "
+msgstr "De gekozen datum is kleiner dan de minimale datum:"
+
+#. module: survey
 #: model:ir.model.fields,help:survey.field_survey_survey__description
 msgid ""
 "The description will be displayed on the home page of the survey. You can "
 "use this to give the purpose and guidelines to your candidates before they "
 "start it."
 msgstr ""
+"De beschrijving wordt weergegeven op de startpagina van de enquête. U kunt "
+"dit gebruiken om het doel en de richtlijnen aan uw kandidaten te geven "
+"voordat ze eraan beginnen."
 
 #. module: survey
 #: code:addons/survey/wizard/survey_invite.py:0
@@ -3132,6 +3149,26 @@ msgid "You cannot send an invitation for a survey that has no questions."
 msgstr ""
 "Het is niet mogelijk een uitnodiging te versturen voor een enquête die geen "
 "vragen heeft."
+
+#. module: survey
+#: code:addons/survey/models/survey_survey.py:0
+#, python-format
+msgid ""
+"You cannot send an invitation for a \"One page per section\" survey if the "
+"survey has no sections."
+msgstr ""
+"U kunt geen uitnodiging voor een \"Eén pagina per sectie\"-enquête verzenden"
+" als de enquête geen secties heeft."
+
+#. module: survey
+#: code:addons/survey/models/survey_survey.py:0
+#, python-format
+msgid ""
+"You cannot send an invitation for a \"One page per section\" survey if the "
+"survey only contains empty sections."
+msgstr ""
+"U kunt geen uitnodiging verzenden voor een enquête \"Eén pagina per sectie\""
+" als de enquête alleen lege secties bevat."
 
 #. module: survey
 #: code:addons/survey/models/survey_survey.py:0

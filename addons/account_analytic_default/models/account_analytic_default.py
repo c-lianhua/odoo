@@ -24,8 +24,11 @@ class AccountAnalyticDefault(models.Model):
 
     @api.constrains('analytic_id', 'analytic_tag_ids')
     def _check_account_or_tags(self):
-        if any(not default.analytic_id and not default.analytic_tag_ids for default in self):
-            raise ValidationError(_('An analytic default requires at least an analytic account or an analytic tag.'))
+        if any(not default.analytic_id
+               and not any(tag.analytic_distribution_ids for tag in default.analytic_tag_ids)
+               for default in self
+               ):
+            raise ValidationError(_('An analytic default requires an analytic account or an analytic tag used for analytic distribution.'))
 
     @api.model
     def account_get(self, product_id=None, partner_id=None, account_id=None, user_id=None, date=None, company_id=None):
@@ -69,14 +72,14 @@ class AccountMoveLine(models.Model):
     _inherit = 'account.move.line'
 
     # Overload of fields defined in account
-    analytic_account_id = fields.Many2one(compute="_compute_analytic_account", store=True, readonly=False)
-    analytic_tag_ids = fields.Many2many(compute="_compute_analytic_account", store=True, readonly=False)
+    analytic_account_id = fields.Many2one(compute="_compute_analytic_account", store=True, readonly=False, copy=True)
+    analytic_tag_ids = fields.Many2many(compute="_compute_analytic_account", store=True, readonly=False, copy=True)
 
     @api.depends('product_id', 'account_id', 'partner_id', 'date_maturity')
     def _compute_analytic_account(self):
         for record in self:
-            record.analytic_account_id = record.analytic_account_id or False
-            record.analytic_tag_ids = record.analytic_tag_ids or False
+            record.analytic_account_id = record.analytic_account_id
+            record.analytic_tag_ids = record.analytic_tag_ids
             rec = self.env['account.analytic.default'].account_get(
                 product_id=record.product_id.id,
                 partner_id=record.partner_id.commercial_partner_id.id or record.move_id.partner_id.commercial_partner_id.id,
@@ -85,6 +88,6 @@ class AccountMoveLine(models.Model):
                 date=record.date_maturity,
                 company_id=record.move_id.company_id.id
             )
-            if rec:
+            if rec and not record.exclude_from_invoice_tab:
                 record.analytic_account_id = rec.analytic_id
                 record.analytic_tag_ids = rec.analytic_tag_ids

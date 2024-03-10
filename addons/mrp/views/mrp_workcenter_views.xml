@@ -166,7 +166,7 @@
                                         <div class="col-6 o_kanban_primary_left">
                                             <div class="btn-group" name="o_wo">
                                             <t t-if="record.workorder_count.raw_value &gt; 0">
-                                                <button class="btn btn-primary" name="action_work_order" type="object">
+                                                <button class="btn btn-primary" name="action_work_order" type="object" context="{'search_default_ready': 1, 'search_default_progress': 1}">
                                                     <span>WORK ORDERS</span>
                                                 </button>
                                             </t>
@@ -316,7 +316,7 @@
                                 </div>
                             </button>
                         </div>
-                        <widget name="web_ribbon" text="Archived" bg_color="bg-danger" attrs="{'invisible': [('active', '=', True)]}"/>
+                        <widget name="web_ribbon" title="Archived" bg_color="bg-danger" attrs="{'invisible': [('active', '=', True)]}"/>
                         <group>
                             <group>
                                 <field name="active" invisible="1"/>

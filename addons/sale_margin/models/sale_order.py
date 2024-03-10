@@ -2,10 +2,17 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import api, fields, models
+from odoo.tools.sql import column_exists, create_column
 
 
 class SaleOrderLine(models.Model):
     _inherit = "sale.order.line"
+
+    def _auto_init(self):
+        if not column_exists(self.env.cr, "sale_order_line", "margin"):
+            # By creating the column 'margin' manually we steer clear of hefty data computation.
+            create_column(self.env.cr, "sale_order_line", "margin", "NUMERIC")
+        return super()._auto_init()
 
     margin = fields.Float(compute='_product_margin', digits='Product Price', store=True)
     purchase_price = fields.Float(string='Cost', digits='Product Price')
@@ -40,6 +47,13 @@ class SaleOrderLine(models.Model):
             return
         self.purchase_price = self._compute_margin(self.order_id, self.product_id, self.product_uom)
 
+    @api.onchange('product_id')
+    def product_id_change(self):
+        # VFE FIXME : bugfix for matrix, the purchase_price will be changed to a computed field in master.
+        res = super(SaleOrderLine, self).product_id_change()
+        self.product_id_change_margin()
+        return res
+
     @api.model
     def create(self, vals):
         vals.update(self._prepare_add_missing_fields(vals))
@@ -70,5 +84,20 @@ class SaleOrder(models.Model):
 
     @api.depends('order_line.margin')
     def _product_margin(self):
-        for order in self:
-            order.margin = sum(order.order_line.filtered(lambda r: r.state != 'cancel').mapped('margin'))
+        if not all(self._ids):
+            for order in self:
+                order.margin = sum(order.order_line.filtered(lambda r: r.state != 'cancel').mapped('margin'))
+        else:
+            self.env["sale.order.line"].flush(['margin', 'state'])
+            # On batch records recomputation (e.g. at install), compute the margins
+            # with a single read_group query for better performance.
+            # This isn't done in an onchange environment because (part of) the data
+            # may not be stored in database (new records or unsaved modifications).
+            grouped_order_lines_data = self.env['sale.order.line'].read_group(
+                [
+                    ('order_id', 'in', self.ids),
+                    ('state', '!=', 'cancel'),
+                ], ['margin', 'order_id'], ['order_id'])
+            mapped_data = {m['order_id'][0]: m['margin'] for m in grouped_order_lines_data}
+            for order in self:
+                order.margin = mapped_data.get(order.id, 0.0)

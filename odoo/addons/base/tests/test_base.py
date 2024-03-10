@@ -335,12 +335,12 @@ class TestBase(TransactionCase):
         for p in (p0, p1, p11, p2, p3):
             self.assertEquals(p.commercial_partner_id, sunhelm, 'Incorrect commercial entity resolution')
             self.assertEquals(p.vat, sunhelm.vat, 'Commercial fields must be automatically synced')
-        sunhelmvat = 'BE0123456789'
+        sunhelmvat = 'BE0123456749'
         sunhelm.write({'vat': sunhelmvat})
         for p in (p0, p1, p11, p2, p3):
             self.assertEquals(p.vat, sunhelmvat, 'Commercial fields must be automatically and recursively synced')
 
-        p1vat = 'BE0987654321'
+        p1vat = 'BE0987654394'
         p1.write({'vat': p1vat})
         for p in (sunhelm, p0, p11, p2, p3):
             self.assertEquals(p.vat, sunhelmvat, 'Sync to children should only work downstream and on commercial entities')
@@ -353,7 +353,7 @@ class TestBase(TransactionCase):
         self.assertEquals(p1.commercial_partner_id, p1, 'Incorrect commercial entity resolution after setting is_company')
 
         # writing on parent should not touch child commercial entities
-        sunhelmvat2 = 'BE0112233445'
+        sunhelmvat2 = 'BE0112233453'
         sunhelm.write({'vat': sunhelmvat2})
         self.assertEquals(p1.vat, p1vat, 'Setting is_company should stop auto-sync of commercial fields')
         self.assertEquals(p0.vat, sunhelmvat2, 'Commercial fields must be automatically synced')
@@ -513,6 +513,14 @@ class TestPartnerRecursion(TransactionCase):
         """ multi-write on several partners in same hierarchy must not trigger a false cycle detection """
         ps = self.p1 + self.p2 + self.p3
         self.assertTrue(ps.write({'phone': '123456'}))
+
+    def test_111_res_partner_recursion_infinite_loop(self):
+        """ The recursion check must not loop forever """
+        self.p2.parent_id = False
+        self.p3.parent_id = False
+        self.p1.parent_id = self.p2
+        with self.assertRaises(ValidationError):
+            (self.p3|self.p2).write({'parent_id': self.p1.id})
 
 
 class TestParentStore(TransactionCase):

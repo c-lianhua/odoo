@@ -2,13 +2,16 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import base64
 
+from unittest.mock import patch
 from odoo.addons.test_mail.tests import common
 from odoo.addons.test_mail.tests.common import mail_new_test_user
+from odoo.addons.test_mail.models.test_mail_models import MailTestSimple
 from odoo.exceptions import AccessError, except_orm
 from odoo.tools import mute_logger, formataddr
-from odoo.tests import tagged
+from odoo.tests import tagged, users
 
 
+@tagged('mail_message')
 class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
 
     @classmethod
@@ -23,8 +26,79 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         })
         cls.Message = cls.env['mail.message'].with_user(cls.user_employee)
 
+    def test_mail_message_values_body_base64_image(self):
+        msg = self.env['mail.message'].with_user(self.user_employee).create({
+            'body': 'taratata <img src="data:image/png;base64,iV/+OkI=" width="2"> <img src="data:image/png;base64,iV/+OkI=" width="2">',
+        })
+        self.assertEqual(len(msg.attachment_ids), 1)
+        self.assertEqual(
+            msg.body,
+            '<p>taratata <img src="/web/image/{attachment.id}?access_token={attachment.access_token}" alt="image0" width="2"> '
+            '<img src="/web/image/{attachment.id}?access_token={attachment.access_token}" alt="image0" width="2"></p>'.format(attachment=msg.attachment_ids[0])
+        )
+
     @mute_logger('odoo.models.unlink')
-    def test_mail_message_values_no_document_values(self):
+    @users('employee')
+    def test_mail_message_values_fromto_long_name(self):
+        """ Long headers may break in python if above 78 chars as folding is not
+        done correctly (see ``_notify_get_reply_to_formatted_email`` docstring
+        + commit linked to this test). """
+        # name would make it blow up: keep only email
+        test_record = self.env['mail.test'].browse(self.alias_record.ids)
+        test_record.write({
+            'name': 'Super Long Name That People May Enter "Even with an internal quoting of stuff"'
+        })
+        msg = self.env['mail.message'].create({
+            'model': test_record._name,
+            'res_id': test_record.id
+        })
+        reply_to_email = f"{test_record.alias_name}@{self.alias_domain}"
+        self.assertEqual(msg.reply_to, reply_to_email,
+                         'Reply-To: use only email when formataddr > 78 chars')
+
+        # name + company_name would make it blow up: keep record_name in formatting
+        test_record.write({'name': 'Name that would be more than 78 with company name'})
+        msg = self.env['mail.message'].create({
+            'model': test_record._name,
+            'res_id': test_record.id
+        })
+        self.assertEqual(msg.reply_to, formataddr((test_record.name, reply_to_email)),
+                         'Reply-To: use recordname as name in format if recordname + company > 78 chars')
+
+        # no record_name: keep company_name in formatting if ok
+        test_record.write({'name': ''})
+        msg = self.env['mail.message'].create({
+            'model': test_record._name,
+            'res_id': test_record.id
+        })
+        self.assertEqual(msg.reply_to, formataddr((self.env.user.company_id.name, reply_to_email)),
+                         'Reply-To: use company as name in format when no record name and still < 78 chars')
+
+        # no record_name and company_name make it blow up: keep only email
+        self.env.user.company_id.write({'name': 'Super Long Name That People May Enter "Even with an internal quoting of stuff"'})
+        msg = self.env['mail.message'].create({
+            'model': test_record._name,
+            'res_id': test_record.id
+        })
+        self.assertEqual(msg.reply_to, reply_to_email,
+                         'Reply-To: use only email when formataddr > 78 chars')
+
+        # whatever the record and company names, email is too long: keep only email
+        test_record.write({
+            'alias_name': 'Waaaay too long alias name that should make any reply-to blow the 78 characters limit',
+            'name': 'Short',
+        })
+        self.env.user.company_id.write({'name': 'Comp'})
+        sanitized_alias_name = 'waaaay-too-long-alias-name-that-should-make-any-reply-to-blow-the-78-characters-limit'
+        msg = self.env['mail.message'].create({
+            'model': test_record._name,
+            'res_id': test_record.id
+        })
+        self.assertEqual(msg.reply_to, f"{sanitized_alias_name}@{self.alias_domain}",
+                         'Reply-To: even a long email is ok as only formataddr is problematic')
+
+    @mute_logger('odoo.models.unlink')
+    def test_mail_message_values_fromto_no_document_values(self):
         msg = self.Message.create({
             'reply_to': 'test.reply@example.com',
             'email_from': 'test.from@example.com',
@@ -34,7 +108,7 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         self.assertEqual(msg.email_from, 'test.from@example.com')
 
     @mute_logger('odoo.models.unlink')
-    def test_mail_message_values_no_document(self):
+    def test_mail_message_values_fromto_no_document(self):
         msg = self.Message.create({})
         self.assertIn('-private', msg.message_id.split('@')[0], 'mail_message: message_id for a void message should be a "private" one')
         reply_to_name = self.env.user.company_id.name
@@ -60,7 +134,7 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         self.assertEqual(msg.email_from, formataddr((self.user_employee.name, self.user_employee.email)))
 
     @mute_logger('odoo.models.unlink')
-    def test_mail_message_values_document_alias(self):
+    def test_mail_message_values_fromto_document_alias(self):
         msg = self.Message.create({
             'model': 'mail.test',
             'res_id': self.alias_record.id
@@ -97,7 +171,7 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         self.assertEqual(msg.email_from, formataddr((self.user_employee.name, self.user_employee.email)))
 
     @mute_logger('odoo.models.unlink')
-    def test_mail_message_values_document_no_alias(self):
+    def test_mail_message_values_fromto_document_no_alias(self):
         test_record = self.env['mail.test.simple'].create({'name': 'Test', 'email_from': 'ignasse@example.com'})
 
         msg = self.Message.create({
@@ -111,7 +185,7 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         self.assertEqual(msg.email_from, formataddr((self.user_employee.name, self.user_employee.email)))
 
     @mute_logger('odoo.models.unlink')
-    def test_mail_message_values_document_manual_alias(self):
+    def test_mail_message_values_fromto_document_manual_alias(self):
         test_record = self.env['mail.test.simple'].create({'name': 'Test', 'email_from': 'ignasse@example.com'})
         alias = self.env['mail.alias'].create({
             'alias_name': 'MegaLias',
@@ -132,7 +206,7 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         self.assertEqual(msg.reply_to, formataddr((reply_to_name, reply_to_email)))
         self.assertEqual(msg.email_from, formataddr((self.user_employee.name, self.user_employee.email)))
 
-    def test_mail_message_values_no_auto_thread(self):
+    def test_mail_message_values_fromto_no_auto_thread(self):
         msg = self.Message.create({
             'model': 'mail.test',
             'res_id': self.alias_record.id,
@@ -142,16 +216,8 @@ class TestMessageValues(common.BaseFunctionalTest, common.MockEmails):
         self.assertNotIn('mail.test', msg.message_id.split('@')[0])
         self.assertNotIn('-%d-' % self.alias_record.id, msg.message_id.split('@')[0])
 
-    def test_mail_message_base64_image(self):
-        msg = self.env['mail.message'].with_user(self.user_employee).create({
-            'body': 'taratata <img src="data:image/png;base64,iV/+OkI=" width="2"> <img src="data:image/png;base64,iV/+OkI=" width="2">',
-        })
-        self.assertEqual(len(msg.attachment_ids), 1)
-        body = '<p>taratata <img src="/web/image/%s?access_token=%s" alt="image0" width="2"> <img src="/web/image/%s?access_token=%s" alt="image0" width="2"></p>'
-        body = body % (msg.attachment_ids[0].id, msg.attachment_ids[0].access_token, msg.attachment_ids[0].id, msg.attachment_ids[0].access_token)
-        self.assertEqual(msg.body, body)
 
-
+@tagged('mail_message')
 class TestMessageAccess(common.BaseFunctionalTest, common.MockEmails):
 
     @classmethod
@@ -259,7 +325,10 @@ class TestMessageAccess(common.BaseFunctionalTest, common.MockEmails):
     def test_mail_message_access_read_notification(self):
         attachment = self.env['ir.attachment'].create({
             'datas': base64.b64encode(b'My attachment'),
-            'name': 'doc.txt'})
+            'name': 'doc.txt',
+            'res_model': self.message._name,
+            'res_id': self.message.id,
+        })
         # attach the attachment to the message
         self.message.write({'attachment_ids': [(4, attachment.id)]})
         self.message.write({'partner_ids': [(4, self.user_employee.partner_id.id)]})
@@ -319,6 +388,40 @@ class TestMessageAccess(common.BaseFunctionalTest, common.MockEmails):
         self.message.write({'partner_ids': [(4, self.user_employee.partner_id.id)]})
         self.env['mail.message'].with_user(self.user_employee).create({'model': 'mail.channel', 'res_id': self.group_private.id, 'body': 'Test', 'parent_id': self.message.id})
 
+    def test_mail_message_access_create_wo_parent_access(self):
+        """ Purpose is to test posting a message on a record whose first message / parent
+        is not accessible by current user. """
+        test_record = self.env['mail.test.simple'].with_context(self._test_context).create({'name': 'Test', 'email_from': 'ignasse@example.com'})
+        message = test_record.message_post(
+            body='<p>This is First Message</p>', subject='Subject',
+            message_type='comment', subtype='mail.mt_note')
+        # portal user have no rights to read the message
+        with self.assertRaises(except_orm):
+            message.with_user(self.user_portal).read(['subject, body'])
+
+        with patch.object(MailTestSimple, 'check_access_rights', return_value=True):
+            with self.assertRaises(except_orm):
+                message.with_user(self.user_portal).read(['subject, body'])
+
+            # parent message is accessible to references notification mail values
+            # for _notify method and portal user have no rights to send the message for this model
+            new_msg = test_record.with_user(self.user_portal).message_post(
+                body='<p>This is Second Message</p>',
+                subject='Subject',
+                parent_id=message.id,
+                partner_ids=[self.user_admin.partner_id.id],
+                message_type='comment',
+                subtype='mail.mt_comment',
+                mail_auto_delete=False)
+
+        new_mail = self.env['mail.mail'].search([
+            ('mail_message_id', '=', new_msg.id),
+            ('references', '=', f'{message.message_id} {new_msg.message_id}'),
+        ])
+
+        self.assertTrue(new_mail)
+        self.assertEqual(new_msg.parent_id, message)
+
     # --------------------------------------------------
     # WRITE
     # --------------------------------------------------
@@ -357,17 +460,19 @@ class TestMessageAccess(common.BaseFunctionalTest, common.MockEmails):
         ).with_context({'mail_create_nosubscribe': False})
 
         # mark all as read clear needactions
-        group_private.message_post(body='Test', message_type='comment', subtype='mail.mt_comment', partner_ids=[emp_partner.id])
+        msg1 = group_private.message_post(body='Test', message_type='comment', subtype='mail.mt_comment', partner_ids=[emp_partner.id])
+        self._clear_bus()
         emp_partner.env['mail.message'].mark_all_as_read(domain=[])
+        self.assertBusNotification([(self.cr.dbname, 'res.partner', emp_partner.id)], [{ 'type': 'mark_as_read', 'message_ids': [msg1.id] }])
         na_count = emp_partner.get_needaction_count()
         self.assertEqual(na_count, 0, "mark all as read should conclude all needactions")
 
         # mark all as read also clear inaccessible needactions
-        new_msg = group_private.message_post(body='Zest', message_type='comment', subtype='mail.mt_comment', partner_ids=[emp_partner.id])
+        msg2 = group_private.message_post(body='Zest', message_type='comment', subtype='mail.mt_comment', partner_ids=[emp_partner.id])
         needaction_accessible = len(emp_partner.env['mail.message'].search([['needaction', '=', True]]))
         self.assertEqual(needaction_accessible, 1, "a new message to a partner is readable to that partner")
 
-        new_msg.sudo().partner_ids = self.env['res.partner']
+        msg2.sudo().partner_ids = self.env['res.partner']
         emp_partner.env['mail.message'].search([['needaction', '=', True]])
         needaction_length = len(emp_partner.env['mail.message'].search([['needaction', '=', True]]))
         self.assertEqual(needaction_length, 1, "message should still be readable when notified")
@@ -375,7 +480,9 @@ class TestMessageAccess(common.BaseFunctionalTest, common.MockEmails):
         na_count = emp_partner.get_needaction_count()
         self.assertEqual(na_count, 1, "message not accessible is currently still counted")
 
+        self._clear_bus()
         emp_partner.env['mail.message'].mark_all_as_read(domain=[])
+        self.assertBusNotification([(self.cr.dbname, 'res.partner', emp_partner.id)], [{ 'type': 'mark_as_read', 'message_ids': [msg2.id] }])
         na_count = emp_partner.get_needaction_count()
         self.assertEqual(na_count, 0, "mark all read should conclude all needactions even inacessible ones")
 

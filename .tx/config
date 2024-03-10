@@ -32,6 +32,11 @@ file_filter = addons/account_facturx/i18n/<lang>.po
 source_file = addons/account_facturx/i18n/account_facturx.pot
 source_lang = en
 
+[odoo-13.account_lock]
+file_filter = addons/account_lock/i18n/<lang>.po
+source_file = addons/account_lock/i18n/account_lock.pot
+source_lang = en
+
 [odoo-13.account_payment]
 file_filter = addons/account_payment/i18n/<lang>.po
 source_file = addons/account_payment/i18n/account_payment.pot
@@ -222,6 +227,16 @@ file_filter = addons/fetchmail/i18n/<lang>.po
 source_file = addons/fetchmail/i18n/fetchmail.pot
 source_lang = en
 
+[odoo-13.fetchmail_gmail]
+file_filter = addons/fetchmail_gmail/i18n/<lang>.po
+source_file = addons/fetchmail_gmail/i18n/fetchmail_gmail.pot
+source_lang = en
+
+[odoo-13.fetchmail_outlook]
+file_filter = addons/fetchmail_outlook/i18n/<lang>.po
+source_file = addons/fetchmail_outlook/i18n/fetchmail_outlook.pot
+source_lang = en
+
 [odoo-13.fleet]
 file_filter = addons/fleet/i18n/<lang>.po
 source_file = addons/fleet/i18n/fleet.pot
@@ -250,6 +265,11 @@ source_lang = en
 [odoo-13.google_drive]
 file_filter = addons/google_drive/i18n/<lang>.po
 source_file = addons/google_drive/i18n/google_drive.pot
+source_lang = en
+
+[odoo-13.google_gmail]
+file_filter = addons/google_gmail/i18n/<lang>.po
+source_file = addons/google_gmail/i18n/google_gmail.pot
 source_lang = en
 
 [odoo-13.google_spreadsheet]
@@ -295,6 +315,11 @@ source_lang = en
 [odoo-13.hr_holidays]
 file_filter = addons/hr_holidays/i18n/<lang>.po
 source_file = addons/hr_holidays/i18n/hr_holidays.pot
+source_lang = en
+
+[odoo-13.hr_holidays_calendar]
+file_filter = addons/hr_holidays_calendar/i18n/<lang>.po
+source_file = addons/hr_holidays_calendar/i18n/hr_holidays_calendar.pot
 source_lang = en
 
 [odoo-13.hr_maintenance]
@@ -447,6 +472,11 @@ file_filter = addons/membership/i18n/<lang>.po
 source_file = addons/membership/i18n/membership.pot
 source_lang = en
 
+[odoo-13.microsoft_outlook]
+file_filter = addons/microsoft_outlook/i18n/<lang>.po
+source_file = addons/microsoft_outlook/i18n/microsoft_outlook.pot
+source_lang = en
+
 [odoo-13.mrp]
 file_filter = addons/mrp/i18n/<lang>.po
 source_file = addons/mrp/i18n/mrp.pot
@@ -502,6 +532,11 @@ file_filter = addons/payment_adyen/i18n/<lang>.po
 source_file = addons/payment_adyen/i18n/payment_adyen.pot
 source_lang = en
 
+[odoo-13.payment_adyen_paybylink]
+file_filter = addons/payment_adyen_paybylink/i18n/<lang>.po
+source_file = addons/payment_adyen_paybylink/i18n/payment_adyen_paybylink.pot
+source_lang = en
+
 [odoo-13.payment_alipay]
 file_filter = addons/payment_alipay/i18n/<lang>.po
 source_file = addons/payment_alipay/i18n/payment_alipay.pot
@@ -547,6 +582,11 @@ file_filter = addons/payment_stripe/i18n/<lang>.po
 source_file = addons/payment_stripe/i18n/payment_stripe.pot
 source_lang = en
 
+[odoo-13.payment_stripe_checkout_webhook]
+file_filter = addons/payment_stripe_checkout_webhook/i18n/<lang>.po
+source_file = addons/payment_stripe_checkout_webhook/i18n/payment_stripe_checkout_webhook.pot
+source_lang = en
+
 [odoo-13.payment_transfer]
 file_filter = addons/payment_transfer/i18n/<lang>.po
 source_file = addons/payment_transfer/i18n/payment_transfer.pot
@@ -575,6 +615,11 @@ source_lang = en
 [odoo-13.pos_cache]
 file_filter = addons/pos_cache/i18n/<lang>.po
 source_file = addons/pos_cache/i18n/pos_cache.pot
+source_lang = en
+
+[odoo-13.pos_cash_rounding]
+file_filter = addons/pos_cash_rounding/i18n/<lang>.po
+source_file = addons/pos_cash_rounding/i18n/pos_cash_rounding.pot
 source_lang = en
 
 [odoo-13.pos_discount]
@@ -615,6 +660,11 @@ source_lang = en
 [odoo-13.pos_sale]
 file_filter = addons/pos_sale/i18n/<lang>.po
 source_file = addons/pos_sale/i18n/pos_sale.pot
+source_lang = en
+
+[odoo-13.pos_six]
+file_filter = addons/pos_six/i18n/<lang>.po
+source_file = addons/pos_six/i18n/pos_six.pot
 source_lang = en
 
 [odoo-13.procurement_jit]
@@ -1081,4 +1131,3 @@ source_lang = en
 file_filter = addons/website_twitter/i18n/<lang>.po
 source_file = addons/website_twitter/i18n/website_twitter.pot
 source_lang = en
-

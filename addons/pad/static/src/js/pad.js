@@ -39,7 +39,9 @@ var FieldPad = AbstractField.extend({
             this.$(".oe_configured").addClass('d-none');
             return Promise.resolve();
         }
-        var defs = [];
+        if (this.mode === 'edit' && typeof(this.value) === 'object') {
+            this.value = this.value.toJSON();
+        }
         if (this.mode === 'edit' && _.str.startsWith(this.value, 'http')) {
             this.url = this.value;
             // please close your eyes and look elsewhere...
@@ -56,11 +58,10 @@ var FieldPad = AbstractField.extend({
             // Guess what we decided...
             var url = {};
             url.toJSON = _.constant(this.url);
-            defs.push(this._setValue(url, {doNotSetDirty: true}));
+            this._setValue(url, {doNotSetDirty: true});
         }
 
-        defs.push(this._super.apply(this, arguments));
-        return Promise.all(defs);
+        return this._super.apply(this, arguments);
     },
 
     //--------------------------------------------------------------------------
@@ -124,7 +125,8 @@ var FieldPad = AbstractField.extend({
                 context: {
                     model: this.model,
                     field_name: this.name,
-                    object_id: this.res_id
+                    object_id: this.res_id,
+                    record: this.recordData,
                 },
             }, {
                 shadow: true

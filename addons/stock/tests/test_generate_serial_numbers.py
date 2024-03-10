@@ -17,7 +17,7 @@ class StockGenerate(SavepointCase):
         })
         cls.uom_unit = cls.env.ref('uom.product_uom_unit')
 
-        warehouse = cls.env['stock.warehouse'].create({
+        cls.warehouse = cls.env['stock.warehouse'].create({
             'name': 'Base Warehouse',
             'reception_steps': 'one_step',
             'delivery_steps': 'ship_only',
@@ -25,11 +25,11 @@ class StockGenerate(SavepointCase):
         })
         cls.location = cls.env['stock.location'].create({
             'name': 'Room A',
-            'location_id': warehouse.lot_stock_id.id,
+            'location_id': cls.warehouse.lot_stock_id.id,
         })
         cls.location_dest = cls.env['stock.location'].create({
             'name': 'Room B',
-            'location_id': warehouse.lot_stock_id.id,
+            'location_id': cls.warehouse.lot_stock_id.id,
         })
 
         cls.Wizard = cls.env['stock.assign.serial']
@@ -158,6 +158,31 @@ class StockGenerate(SavepointCase):
                 generated_numbers.pop(0)
             )
 
+        # Case #4: Prefix + suffix, identical number pattern
+        move = self.get_new_move(nbre_of_lines)
+        form_wizard = Form(self.env['stock.assign.serial'].with_context(
+            default_move_id=move.id,
+            default_next_serial_number='BAV023B00001S00001',
+            default_next_serial_count=nbre_of_lines,
+        ))
+        wiz = form_wizard.save()
+        wiz.generate_serial_numbers()
+        # Checks all move lines have the right SN
+        generated_numbers = [
+            'BAV023B00001S00001', 'BAV023B00001S00002', 'BAV023B00001S00003',
+            'BAV023B00001S00004', 'BAV023B00001S00005', 'BAV023B00001S00006',
+            'BAV023B00001S00007', 'BAV023B00001S00008', 'BAV023B00001S00009',
+            'BAV023B00001S00010'
+        ]
+        for move_line in move.move_line_nosuggest_ids:
+            # For a product tracked by SN, the `qty_done` is set on 1 when
+            # `lot_name` is set.
+            self.assertEqual(move_line.qty_done, 1)
+            self.assertEqual(
+                move_line.lot_name,
+                generated_numbers.pop(0)
+            )
+
     def test_generate_03_raise_exception(self):
         """ Tries to generate some SN but with invalid initial number.
         """
@@ -275,7 +300,12 @@ class StockGenerate(SavepointCase):
         has five new move lines with the right `lot_name`.
         """
         nbre_of_lines = 10
+        picking_type = self.env['stock.picking.type'].search([
+            ('use_create_lots', '=', True),
+            ('warehouse_id', '=', self.warehouse.id)
+        ])
         move = self.get_new_move(nbre_of_lines)
+        move.picking_type_id = picking_type
         # We must begin with a move with 10 move lines.
         self.assertEqual(len(move.move_line_ids), nbre_of_lines)
 
@@ -307,7 +337,12 @@ class StockGenerate(SavepointCase):
         been correctly set.
         """
         nbre_of_lines = 5
+        picking_type = self.env['stock.picking.type'].search([
+            ('use_create_lots', '=', True),
+            ('warehouse_id', '=', self.warehouse.id)
+        ])
         move = self.get_new_move(nbre_of_lines)
+        move.picking_type_id = picking_type
         # We must begin with a move with five move lines.
         self.assertEqual(len(move.move_line_ids), nbre_of_lines)
 

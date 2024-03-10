@@ -47,3 +47,10 @@ Tomas Alvarez tomas@vauxoo.com https://github.com/tomeyro
 Carmen Liliana Miranda González carmen@vauxoo.com https://github.com/CarmenMiranda
 Arturo Flores arturo@vauxoo.com https://github.com/umiphos
 Deivis Laya deivis@vauxoo.com https://github.com/deivislaya
+Yennifer Santiago yennifer@vauxoo.com https://github.com/ysantiago
+Alejandro Santillan asantillan@vauxoo.com https://github.com/R4Alex
+Williams Estrada williams@vauxoo.com https://github.com/WR-96
+Francisco J. Luna fluna@vauxoo.com https://github.com/frahikLV
+Andrea Arce andrea@vauxoo.com https://github.com/andreaarce
+Francisco Alejandro González Luna aluna@vauxoo.com https://github.com/TheAlekLuna
+Alejandro Garza agarza@vauxoo.com https://github.com/agarzaarvizu

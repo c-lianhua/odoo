@@ -11,24 +11,27 @@ class WebsiteMail(http.Controller):
         # TDE FIXME: check this method with new followers
         res_id = int(id)
         is_follower = message_is_follower == 'on'
-        record = request.env[object].browse(res_id)
+        record = request.env[object].browse(res_id).exists()
+        if not record:
+            return False
+
+        record.check_access_rights('read')
+        record.check_access_rule('read')
 
         # search partner_id
         if request.env.user != request.website.user_id:
             partner_ids = request.env.user.partner_id.ids
         else:
             # mail_thread method
-            partner_ids = [p.id for p in self.env['mail.thread'].sudo()._mail_find_partner_from_emails([email], records=record.sudo(), check_followers=True) if p]
+            partner_ids = [p.id for p in request.env['mail.thread'].sudo()._mail_find_partner_from_emails([email], records=record.sudo()) if p]
             if not partner_ids or not partner_ids[0]:
                 name = email.split('@')[0]
                 partner_ids = request.env['res.partner'].sudo().create({'name': name, 'email': email}).ids
         # add or remove follower
         if is_follower:
-            record.check_access_rule('read')
             record.sudo().message_unsubscribe(partner_ids)
             return False
         else:
-            record.check_access_rule('read')
             # add partner to session
             request.session['partner_id'] = partner_ids[0]
             record.sudo().message_subscribe(partner_ids)

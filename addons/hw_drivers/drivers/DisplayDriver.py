@@ -13,6 +13,11 @@ from odoo import http
 from odoo.addons.hw_drivers.tools import helpers
 from odoo.addons.hw_drivers.controllers.driver import Driver, event_manager, iot_devices
 
+try:
+    from odoo.addons.hw_drivers.controllers.driver import cm
+except:
+    cm = None
+
 path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../views'))
 loader = jinja2.FileSystemLoader(path)
 
@@ -35,8 +40,9 @@ class DisplayDriver(Driver):
         self.event_data = threading.Event()
         self.owner = False
         self.rendered_html = ''
-        self.load_url()
-        self.call_xdotools('F11')
+        if self.device_identifier != 'distant_display':
+            self._x_screen = device.get('x_screen', '0')
+            self.load_url()
 
     @property
     def device_identifier(self):
@@ -52,9 +58,9 @@ class DisplayDriver(Driver):
         return len(displays) and iot_devices[displays[0]]
 
     def action(self, data):
-        if data.get('action') == "update_url":
+        if data.get('action') == "update_url" and self.device_identifier != 'distant_display':
             self.update_url(data.get('url'))
-        elif data.get('action') == "display_refresh":
+        elif data.get('action') == "display_refresh" and self.device_identifier != 'distant_display':
             self.call_xdotools('F5')
         elif data.get('action') == "take_control":
             self.take_control(self.data['owner'], data.get('html'))
@@ -68,20 +74,22 @@ class DisplayDriver(Driver):
             event_manager.device_changed(self)
 
     def run(self):
-        while True:
+        while self.device_identifier != 'distant_display':
             time.sleep(60)
-            if self.url != 'http://localhost:8069/point_of_sale/display/':
+            if self.url != 'http://localhost:8069/point_of_sale/display/' + self.device_identifier:
                 # Refresh the page every minute
                 self.call_xdotools('F5')
 
     def update_url(self, url=None):
+        os.environ['DISPLAY'] = ":0." + self._x_screen
+        os.environ['XAUTHORITY'] = '/run/lightdm/pi/xauthority'
         firefox_env = os.environ.copy()
-        firefox_env['HOME'] = '/tmp'
-        firefox_env['DISPLAY'] = ':0.0'
-        firefox_env['XAUTHORITY'] = '/run/lightdm/pi/xauthority'
-        self.url = url or 'http://localhost:8069/point_of_sale/display/'
-        if self.device_identifier != 'distant_display':
-            subprocess.Popen(['firefox', self.url], env=firefox_env)
+        firefox_env['HOME'] = '/tmp/' + self._x_screen
+        self.url = url or 'http://localhost:8069/point_of_sale/display/' + self.device_identifier
+        new_window = subprocess.call(['xdotool', 'search', '--onlyvisible', '--screen', self._x_screen, '--class', 'Firefox'])
+        subprocess.Popen(['firefox', self.url], env=firefox_env)
+        if new_window:
+            self.call_xdotools('F11')
 
     def load_url(self):
         url = None
@@ -101,10 +109,10 @@ class DisplayDriver(Driver):
         return self.update_url(url)
 
     def call_xdotools(self, keystroke):
-        os.environ['DISPLAY'] = ":0.0"
+        os.environ['DISPLAY'] = ":0." + self._x_screen
         os.environ['XAUTHORITY'] = "/run/lightdm/pi/xauthority"
         try:
-            subprocess.call(['xdotool', 'search', '--sync', '--onlyvisible', '--class', 'Firefox', 'windowactivate', 'key', keystroke])
+            subprocess.call(['xdotool', 'search', '--sync', '--onlyvisible', '--screen', self._x_screen, '--class', 'Firefox', 'key', keystroke])
             return "xdotool succeeded in stroking " + keystroke
         except:
             return "xdotool threw an error, maybe it is not installed on the IoTBox"
@@ -138,7 +146,7 @@ class DisplayController(http.Controller):
     @http.route('/hw_proxy/display_refresh', type='json', auth='none', cors='*')
     def display_refresh(self):
         display = DisplayDriver.get_default_display()
-        if display:
+        if display and display.device_identifier != 'distant_display':
             return display.call_xdotools('F5')
 
     @http.route('/hw_proxy/customer_facing_display', type='json', auth='none', cors='*')
@@ -166,9 +174,13 @@ class DisplayController(http.Controller):
             return {'status': 'OWNER'}
         return {'status': 'NOWNER'}
 
-    @http.route(['/point_of_sale/get_serialized_order'], type='json', auth='none')
-    def get_serialized_order(self):
-        display = DisplayDriver.get_default_display()
+    @http.route(['/point_of_sale/get_serialized_order', '/point_of_sale/get_serialized_order/<string:display_identifier>'], type='json', auth='none')
+    def get_serialized_order(self, display_identifier=None):
+        if display_identifier:
+            display = iot_devices.get(display_identifier)
+        else:
+            display = DisplayDriver.get_default_display()
+
         if display:
             return display.get_serialized_order()
         return {
@@ -176,8 +188,8 @@ class DisplayController(http.Controller):
             'error': "No display found",
         }
 
-    @http.route(['/point_of_sale/display'], type='http', auth='none')
-    def display(self):
+    @http.route(['/point_of_sale/display', '/point_of_sale/display/<string:display_identifier>'], type='http', auth='none')
+    def display(self, display_identifier=None):
         cust_js = None
         interfaces = ni.interfaces()
 
@@ -189,17 +201,24 @@ class DisplayController(http.Controller):
             if 'wlan' in iface_id or 'eth' in iface_id:
                 iface_obj = ni.ifaddresses(iface_id)
                 ifconfigs = iface_obj.get(ni.AF_INET, [])
+                essid = helpers.get_ssid()
                 for conf in ifconfigs:
                     if conf.get('addr'):
                         display_ifaces.append({
                             'iface_id': iface_id,
+                            'essid': essid,
                             'addr': conf.get('addr'),
                             'icon': 'sitemap' if 'eth' in iface_id else 'wifi',
                         })
+
+        if not display_identifier:
+            display_identifier = DisplayDriver.get_default_display().device_identifier
 
         return pos_display_template.render({
             'title': "Odoo -- Point of Sale",
             'breadcrumb': 'POS Client display',
             'cust_js': cust_js,
             'display_ifaces': display_ifaces,
+            'display_identifier': display_identifier,
+            'pairing_code': cm and cm.pairing_code,
         })

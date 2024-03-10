@@ -523,10 +523,9 @@ var BasicComposer = Widget.extend({
         clearTimeout(this._cannedTimeout);
         var self = this;
         this._preprocessMessage().then(function (message) {
-            self.trigger('post_message', message, function() {
-                self._clearComposerOnSend();
-                self.$input.focus();
-            });
+            self.trigger('post_message', message);
+            self._clearComposerOnSend();
+            self.$input.focus();
         });
     },
     /**
@@ -658,7 +657,6 @@ var BasicComposer = Widget.extend({
      */
     _onBodyFileDrop: function (ev) {
         ev.preventDefault();
-        ev.stopPropagation();
         this.$(".o_file_drop_zone_container").addClass("d-none");
     },
     /**

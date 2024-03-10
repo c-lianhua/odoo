@@ -50,7 +50,7 @@ var TranslatePageMenu = websiteNavbarData.WebsiteNavbarActionWidget.extend({
         current.href = window.location.toString();
         current.search += (current.search ? '&' : '?') + 'enable_editor=1';
         // we are in translate mode, the pathname starts with '/<url_code/'
-        current.pathname = current.pathname.substr(current.pathname.indexOf('/', 1));
+        current.pathname = current.pathname.substr(Math.max(0, current.pathname.indexOf('/', 1)));
 
         var link = document.createElement('a');
         link.href = '/website/lang/default';
@@ -73,6 +73,13 @@ var TranslatePageMenu = websiteNavbarData.WebsiteNavbarActionWidget.extend({
         }
 
         var translator = new TranslatorMenu(this);
+
+        // We don't want the BS dropdown to close
+        // when clicking in a element to translate
+        $('.dropdown-menu').on('click', '.o_editable', function (ev) {
+            ev.stopPropagation();
+        });
+
         return translator.prependTo(document.body);
     },
 });

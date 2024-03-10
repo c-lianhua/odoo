@@ -120,6 +120,42 @@ class GoogleService(models.TransientModel):
             error_msg = _("Something went wrong during your token generation. Maybe your Authorization Code is invalid")
             raise self.env['res.config.settings'].get_config_warning(error_msg)
 
+    @api.model
+    def _get_access_token(self, refresh_token, service, scope):
+        """Fetch the access token thanks to the refresh token."""
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        client_id = get_param('google_%s_client_id' % service, default=False)
+        client_secret = get_param('google_%s_client_secret' % service, default=False)
+
+        if not client_id or not client_secret:
+            raise UserError(_('Google %s is not yet configured.', service.title()))
+
+        if not refresh_token:
+            raise UserError(_('The refresh token for authentication is not set.'))
+
+        try:
+            result = requests.post(
+                GOOGLE_TOKEN_ENDPOINT,
+                data={
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'refresh_token': refresh_token,
+                    'grant_type': 'refresh_token',
+                    'scope': scope,
+                },
+                headers={'Content-type': 'application/x-www-form-urlencoded'},
+                timeout=TIMEOUT,
+            )
+            result.raise_for_status()
+        except requests.HTTPError:
+            raise UserError(
+                _('Something went wrong during the token generation. Please request again an authorization code.')
+            )
+
+        json_result = result.json()
+
+        return json_result.get('access_token'), json_result.get('expires_in')
+
     # FIXME : this method update a field defined in google_calendar module. Since it is used only in that module, maybe it should be moved.
     @api.model
     def _refresh_google_token_json(self, refresh_token, service):  # exchange_AUTHORIZATION vs Token (service = calendar)
@@ -144,7 +180,7 @@ class GoogleService(models.TransientModel):
         except requests.HTTPError as error:
             if error.response.status_code == 400:  # invalid grant
                 with registry(request.session.db).cursor() as cur:
-                    self.env(cur)['res.users'].browse(self.env.uid).write({'google_%s_rtoken' % service: False})
+                    self.env(cur)['res.users'].browse(self.env.uid).sudo().write({'google_%s_rtoken' % service: False})
             error_key = error.response.json().get("error", "nc")
             _logger.exception("Bad google request : %s !", error_key)
             error_msg = _("Something went wrong during your token generation. Maybe your Authorization Code is invalid or already expired [%s]") % error_key
@@ -188,7 +224,7 @@ class GoogleService(models.TransientModel):
                 response = ""
             else:
                 _logger.exception("Bad google request : %s !", error.response.content)
-                if error.response.status_code in (400, 401, 410):
+                if error.response.status_code in (400, 401, 403, 410):
                     raise error
                 raise self.env['res.config.settings'].get_config_warning(_("Something went wrong with your request to google"))
         return (status, response, ask_time)

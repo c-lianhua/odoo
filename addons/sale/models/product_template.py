@@ -6,6 +6,7 @@ import logging
 
 from odoo import api, fields, models, _
 from odoo.addons.base.models.res_partner import WARNING_MESSAGE, WARNING_HELP
+from odoo.exceptions import ValidationError
 from odoo.tools.float_utils import float_round
 
 _logger = logging.getLogger(__name__)
@@ -13,6 +14,9 @@ _logger = logging.getLogger(__name__)
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
+
+    def _default_visible_expense_policy(self):
+        return self.user_has_groups('analytic.group_analytic_accounting')
 
     service_type = fields.Selection([('manual', 'Manually set quantities on order')], string='Track Service',
         help="Manually set quantities on order: Invoice based on the manually entered quantity, without creating an analytic account.\n"
@@ -27,8 +31,9 @@ class ProductTemplate(models.Model):
         default='no',
         help="Expenses and vendor bills can be re-invoiced to a customer."
              "With this option, a validated expense can be re-invoice to a customer at its cost or sales price.")
-    visible_expense_policy = fields.Boolean("Re-Invoice Policy visible", compute='_compute_visible_expense_policy')
+    visible_expense_policy = fields.Boolean("Re-Invoice Policy visible", compute='_compute_visible_expense_policy', default=lambda self: self._default_visible_expense_policy())
     sales_count = fields.Float(compute='_compute_sales_count', string='Sold')
+    visible_qty_configurator = fields.Boolean("Quantity visible in configurator", compute='_compute_visible_qty_configurator')
     invoice_policy = fields.Selection([
         ('order', 'Ordered quantities'),
         ('delivery', 'Delivered quantities')], string='Invoicing Policy',
@@ -36,16 +41,45 @@ class ProductTemplate(models.Model):
              'Delivered Quantity: Invoice quantities delivered to the customer.',
         default='order')
 
+    def _compute_visible_qty_configurator(self):
+        for product_template in self:
+            product_template.visible_qty_configurator = True
+
     @api.depends('name')
     def _compute_visible_expense_policy(self):
         visibility = self.user_has_groups('analytic.group_analytic_accounting')
         for product_template in self:
             product_template.visible_expense_policy = visibility
 
+
+    @api.onchange('sale_ok')
+    def _change_sale_ok(self):
+        if not self.sale_ok:
+            self.expense_policy = 'no'
+
     @api.depends('product_variant_ids.sales_count')
     def _compute_sales_count(self):
         for product in self:
             product.sales_count = float_round(sum([p.sales_count for p in product.with_context(active_test=False).product_variant_ids]), precision_rounding=product.uom_id.rounding)
+
+
+    @api.constrains('company_id')
+    def _check_sale_product_company(self):
+        """Ensure the product is not being restricted to a single company while
+        having been sold in another one in the past, as this could cause issues."""
+        target_company = self.company_id
+        if target_company:  # don't prevent writing `False`, should always work
+            product_data = self.env['product.product'].sudo().with_context(active_test=False).search_read([('product_tmpl_id', 'in', self.ids)], fields=['id'])
+            product_ids = list(map(lambda p: p['id'], product_data))
+            so_lines = self.env['sale.order.line'].sudo().search_read([('product_id', 'in', product_ids), ('company_id', '!=', target_company.id)], fields=['id', 'product_id'])
+            used_products = list(map(lambda sol: sol['product_id'][1], so_lines))
+            if so_lines:
+                raise ValidationError(_('The following products cannot be restricted to the company'
+                                        ' %s because they have already been used in quotations or '
+                                        'sales orders in another company:\n%s\n'
+                                        'You can archive these products and recreate them '
+                                        'with your company restriction instead, or leave them as '
+                                        'shared product.') % (target_company.name, ', '.join(used_products)))
 
     def action_view_sales(self):
         action = self.env.ref('sale.report_all_channels_sales_action').read()[0]
@@ -103,6 +137,11 @@ class ProductTemplate(models.Model):
             if not self.invoice_policy:
                 self.invoice_policy = 'order'
             self.service_type = 'manual'
+        if self._origin and self.sales_count > 0:
+            res['warning'] = {
+                'title': _("Warning"),
+                'message': _("You cannot change the product's type because it is already used in sales orders.")
+            }
         return res
 
     @api.model
@@ -113,9 +152,6 @@ class ProductTemplate(models.Model):
                 return [{
                     'label': _('Import Template for Products'),
                     'template': '/product/static/xls/product_template.xls'
-                }, {
-                    'label': _('Import Template for Products (with several prices)'),
-                    'template': '/sale/static/xls/product_pricelist_several.xls'
                 }]
         return res
 
@@ -206,13 +242,16 @@ class ProductTemplate(models.Model):
                 )
             list_price = product.price_compute('list_price')[product.id]
             price = product.price if pricelist else list_price
-            display_image = bool(product.image_1920)
+            display_image = bool(product.image_128)
             display_name = product.display_name
+            price_extra = (product.price_extra or 0.0 ) + (sum(no_variant_attributes_price_extra) or 0.0)
         else:
-            product_template = product_template.with_context(current_attributes_price_extra=[v.price_extra or 0.0 for v in combination])
+            current_attributes_price_extra = [v.price_extra or 0.0 for v in combination]
+            product_template = product_template.with_context(current_attributes_price_extra=current_attributes_price_extra)
+            price_extra = sum(current_attributes_price_extra)
             list_price = product_template.price_compute('list_price')[product_template.id]
             price = product_template.price if pricelist else list_price
-            display_image = bool(product_template.image_1920)
+            display_image = bool(product_template.image_128)
 
             combination_name = combination._get_combination_name()
             if combination_name:
@@ -221,6 +260,10 @@ class ProductTemplate(models.Model):
         if pricelist and pricelist.currency_id != product_template.currency_id:
             list_price = product_template.currency_id._convert(
                 list_price, pricelist.currency_id, product_template._get_current_company(pricelist=pricelist),
+                fields.Date.today()
+            )
+            price_extra = product_template.currency_id._convert(
+                price_extra, pricelist.currency_id, product_template._get_current_company(pricelist=pricelist),
                 fields.Date.today()
             )
 
@@ -234,8 +277,15 @@ class ProductTemplate(models.Model):
             'display_image': display_image,
             'price': price,
             'list_price': list_price,
+            'price_extra': price_extra,
             'has_discounted_price': has_discounted_price,
         }
+
+    def _can_be_added_to_cart(self):
+        """
+        Pre-check to `_is_add_to_cart_possible` to know if product can be sold.
+        """
+        return self.sale_ok
 
     def _is_add_to_cart_possible(self, parent_combination=None):
         """
@@ -250,7 +300,7 @@ class ProductTemplate(models.Model):
         :rtype: bool
         """
         self.ensure_one()
-        if not self.active:
+        if not self.active or not self._can_be_added_to_cart():
             # for performance: avoid calling `_get_possible_combinations`
             return False
         return next(self._get_possible_combinations(parent_combination), False) is not False

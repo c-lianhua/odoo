@@ -13,16 +13,16 @@ class User(models.Model):
     employee_id = fields.Many2one('hr.employee', string="Company employee",
         compute='_compute_company_employee', search='_search_company_employee', store=False)
 
-    job_title = fields.Char(related='employee_id.job_title', readonly=False)
-    work_phone = fields.Char(related='employee_id.work_phone', readonly=False)
-    mobile_phone = fields.Char(related='employee_id.mobile_phone', readonly=False)
+    job_title = fields.Char(related='employee_id.job_title', readonly=False, related_sudo=False)
+    work_phone = fields.Char(related='employee_id.work_phone', readonly=False, related_sudo=False)
+    mobile_phone = fields.Char(related='employee_id.mobile_phone', readonly=False, related_sudo=False)
     employee_phone = fields.Char(related='employee_id.phone', readonly=False, related_sudo=False)
     work_email = fields.Char(related='employee_id.work_email', readonly=False, related_sudo=False)
     category_ids = fields.Many2many(related='employee_id.category_ids', string="Employee Tags", readonly=False, related_sudo=False)
     department_id = fields.Many2one(related='employee_id.department_id', readonly=False, related_sudo=False)
     address_id = fields.Many2one(related='employee_id.address_id', readonly=False, related_sudo=False)
     work_location = fields.Char(related='employee_id.work_location', readonly=False, related_sudo=False)
-    employee_parent_id = fields.Many2one(related='employee_id.parent_id', related_sudo=False)
+    employee_parent_id = fields.Many2one(related='employee_id.parent_id', readonly=False, related_sudo=False)
     coach_id = fields.Many2one(related='employee_id.coach_id', readonly=False, related_sudo=False)
     address_home_id = fields.Many2one(related='employee_id.address_home_id', readonly=False, related_sudo=False)
     is_address_home_a_company = fields.Boolean(related='employee_id.is_address_home_a_company', readonly=False, related_sudo=False)
@@ -150,6 +150,11 @@ class User(models.Model):
             self = self.with_user(SUPERUSER_ID)
         return super(User, self).fields_view_get(view_id=view_id, view_type=view_type, toolbar=toolbar, submenu=submenu)
 
+    def _get_employee_fields_to_sync(self):
+        """Get values to sync to the related employee when the User is changed.
+        """
+        return ['name', 'email', 'image_1920', 'tz']
+
     def write(self, vals):
         """
         Synchronize user and its related employee
@@ -169,8 +174,9 @@ class User(models.Model):
         result = super(User, self).write(vals)
 
         employee_values = {}
-        for fname in [f for f in ['name', 'email', 'image_1920', 'tz'] if f in vals]:
+        for fname in [f for f in self._get_employee_fields_to_sync() if f in vals]:
             employee_values[fname] = vals[fname]
+
         if employee_values:
             if 'email' in employee_values:
                 employee_values['work_email'] = employee_values.pop('email')
@@ -209,7 +215,7 @@ class User(models.Model):
     def action_create_employee(self):
         self.ensure_one()
         self.env['hr.employee'].create(dict(
-            user_id=self.id,
             name=self.name,
+            company_id=self.env.company.id,
             **self.env['hr.employee']._sync_user(self)
         ))

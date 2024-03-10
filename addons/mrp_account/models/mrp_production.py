@@ -17,6 +17,11 @@ class MrpProduction(models.Model):
     _inherit = 'mrp.production'
 
     extra_cost = fields.Float(copy=False, help='Extra cost per produced unit')
+    show_valuation = fields.Boolean(compute='_compute_show_valuation')
+
+    def _compute_show_valuation(self):
+        for order in self:
+            order.show_valuation = any(m.state == 'done' for m in order.move_finished_ids)
 
     def _cal_price(self, consumed_moves):
         """Set a price unit on the finished move according to `consumed_moves`.
@@ -34,7 +39,7 @@ class MrpProduction(models.Model):
             if finished_move.product_id.cost_method in ('fifo', 'average'):
                 qty_done = finished_move.product_uom._compute_quantity(finished_move.quantity_done, finished_move.product_id.uom_id)
                 extra_cost = self.extra_cost * qty_done
-                finished_move.price_unit = (sum([-m.stock_valuation_layer_ids.value for m in consumed_moves]) + work_center_cost + extra_cost) / qty_done
+                finished_move.price_unit = (sum([-m.stock_valuation_layer_ids.value for m in consumed_moves.sudo()]) + work_center_cost + extra_cost) / qty_done
         return True
 
     def _prepare_wc_analytic_line(self, wc_line):
@@ -58,7 +63,7 @@ class MrpProduction(models.Model):
         AccountAnalyticLine = self.env['account.analytic.line'].sudo()
         for wc_line in self.workorder_ids.filtered('workcenter_id.costs_hour_account_id'):
             vals = self._prepare_wc_analytic_line(wc_line)
-            precision_rounding = wc_line.workcenter_id.costs_hour_account_id.currency_id.rounding
+            precision_rounding = (wc_line.workcenter_id.costs_hour_account_id.currency_id or self.company_id.currency_id).rounding
             if not float_is_zero(vals.get('amount', 0.0), precision_rounding=precision_rounding):
                 # we use SUPERUSER_ID as we do not guarantee an mrp user
                 # has access to account analytic lines but still should be
@@ -79,4 +84,3 @@ class MrpProduction(models.Model):
         context.update(self.env.context)
         context['no_at_date'] = True
         return dict(action, domain=domain, context=context)
-

@@ -108,14 +108,17 @@ var dom = {
             class: $textarea[0].className,
         });
 
+        var direction = _t.database.parameters.direction === 'rtl' ? 'right' : 'left';
         $fixedTextarea.css({
+            position: 'absolute',
             opacity: 0,
-            height: 0,
+            height: 10,
             borderTopWidth: 0,
             borderBottomWidth: 0,
             padding: 0,
             overflow: 'hidden',
-        });
+            top: -10000,
+        }).css(direction, -10000);
         $fixedTextarea.data("auto_resize", true);
 
         // The following line is necessary to prevent the scrollbar to appear
@@ -431,6 +434,9 @@ var dom = {
         if (options && options.prop) {
             $input.prop(options.prop);
         }
+        if (options && options.role) {
+            $input.attr('role', options.role);
+        }
         return $container.append($input, $label);
     },
     /**
@@ -509,8 +515,15 @@ var dom = {
             if (options.maxWidth) {
                 maxWidth = options.maxWidth();
             } else {
-                var mLeft = $el.is('.ml-auto, .mx-auto, .m-auto');
-                var mRight = $el.is('.mr-auto, .mx-auto, .m-auto');
+                var mLeft;
+                var mRight;
+                if (_t.database.parameters.direction === 'rtl') {
+                    mLeft = $el.is('.mr-auto, .mx-auto, .m-auto');
+                    mRight = $el.is('.ml-auto, .mx-auto, .m-auto');
+                } else {
+                    mLeft = $el.is('.ml-auto, .mx-auto, .m-auto');
+                    mRight = $el.is('.mr-auto, .mx-auto, .m-auto');
+                }
                 maxWidth = computeFloatOuterWidthWithMargins($el[0], mLeft, mRight);
                 var style = window.getComputedStyle($el[0]);
                 maxWidth -= (parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth));

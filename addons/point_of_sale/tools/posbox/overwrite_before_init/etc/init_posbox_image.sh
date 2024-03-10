@@ -8,15 +8,20 @@ __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 __file="${__dir}/$(basename "${BASH_SOURCE[0]}")"
 __base="$(basename ${__file} .sh)"
 
-# Since we are emulating, the real /boot is not mounted, 
-# leading to mismatch between kernel image and modules.
-mount /dev/sda1 /boot
-
 # Recommends: antiword, graphviz, ghostscript, python-gevent, poppler-utils
 export DEBIAN_FRONTEND=noninteractive
 echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 
+# set locale to en_US
+echo "set locale to en_US"
+echo "export LANGUAGE=en_US.UTF-8" >> ~/.bashrc
+echo "export LANG=en_US.UTF-8" >> ~/.bashrc
+echo "export LC_ALL=en_US.UTF-8" >> ~/.bashrc
+locale-gen
+source ~/.bashrc
 
+apt-mark hold firmware-brcm80211
+# upgrade firmware-brcm80211 broke access point on rpi4
 apt-get update && apt-get -y upgrade
 # Do not be too fast to upgrade to more recent firmware and kernel than 4.38
 # Firmware 4.44 seems to prevent the LED mechanism from working
@@ -41,6 +46,7 @@ PKGS_TO_INSTALL="
     hostapd \
     git \
     rsync \
+    kpartx \
     swig \
     console-data \
     lightdm \
@@ -50,6 +56,7 @@ PKGS_TO_INSTALL="
     xdotool \
     unclutter \
     x11-utils \
+    xserver-xorg-video-dummy \
     openbox \
     rpi-update \
     adduser \
@@ -61,10 +68,9 @@ PKGS_TO_INSTALL="
     python3-dateutil \
     python3-decorator \
     python3-docutils \
-    python3-feedparser \
     python3-pil \
     python3-jinja2 \
-    python3-ldap3 \
+    python3-ldap \
     python3-lxml \
     python3-mako \
     python3-mock \
@@ -88,7 +94,6 @@ PKGS_TO_INSTALL="
     python3-passlib \
     python3-libsass \
     python3-qrcode \
-    python3-html2text \
     python3-unittest2 \
     python3-simplejson"
 
@@ -99,7 +104,7 @@ apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-conf
 
 apt-get clean
 localepurge
-rm -rf /usr/share/doc
+rm -rfv /usr/share/doc
 
 # python-usb in wheezy is too old
 # the latest pyusb from pip does not work either, usb.core.find() never returns
@@ -125,7 +130,7 @@ groupadd usbusers
 usermod -a -G usbusers pi
 usermod -a -G lp pi
 usermod -a -G input lightdm
-mkdir /var/log/odoo
+mkdir -v /var/log/odoo
 chown pi:pi /var/log/odoo
 chown pi:pi -R /home/pi/odoo/
 
@@ -142,30 +147,16 @@ update-rc.d -f nginx remove
 update-rc.d -f dnsmasq remove
 update-rc.d timesyncd defaults
 
-systemctl daemon-reload
 systemctl enable ramdisks.service
+systemctl enable led-status.service
 systemctl disable dphys-swapfile.service
 systemctl enable ssh
-
-# USER PI AUTO LOGIN (from nano raspi-config)
-# We take the whole algorithm from raspi-config in order to stay compatible with raspbian infrastructure
-if command -v systemctl > /dev/null && systemctl | grep -q '\-\.mount'; then
-        SYSTEMD=1
-elif [ -f /etc/init.d/cron ] && [ ! -h /etc/init.d/cron ]; then
-        SYSTEMD=0
-else
-        echo "Unrecognised init system"
-        return 1
-fi
-if [ $SYSTEMD -eq 1 ]; then
-    systemctl set-default graphical.target
-    systemctl disable getty@tty1.service
-    systemctl enable autologin@.service
-    systemctl disable systemd-timesyncd.service
-    systemctl disable hostapd.service
-else
-    update-rc.d lightdm enable 2
-fi
+systemctl set-default graphical.target
+systemctl disable getty@tty1.service
+systemctl enable autologin@.service
+systemctl disable systemd-timesyncd.service
+systemctl unmask hostapd.service
+systemctl disable hostapd.service
 
 # disable overscan in /boot/config.txt, we can't use
 # overwrite_after_init because it's on a different device
@@ -174,22 +165,18 @@ fi
 # cf: https://www.raspberrypi.org/documentation/configuration/raspi-config.md
 echo "disable_overscan=1" >> /boot/config.txt
 
-# https://www.raspberrypi.org/forums/viewtopic.php?p=79249
-# to not have "setting up console font and keymap" during boot take ages
-setupcon
+# Separate framebuffers for both screens on RPI4
+sed -i '/dtoverlay/d' /boot/config.txt
 
 # exclude /drivers folder from git info to be able to load specific drivers
 echo "addons/hw_drivers/drivers/" > /home/pi/odoo/.git/info/exclude
 
 # create dirs for ramdisks
 create_ramdisk_dir () {
-    mkdir "${1}_ram"
+    mkdir -v "${1}_ram"
 }
 
 create_ramdisk_dir "/var"
 create_ramdisk_dir "/etc"
 create_ramdisk_dir "/tmp"
-mkdir /root_bypass_ramdisks
-umount /dev/sda1
-
-reboot
+mkdir -v /root_bypass_ramdisks

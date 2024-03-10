@@ -45,7 +45,9 @@
         <body id="iframe_target" class="o_in_iframe">
             <div id="web_editor-top-edit"></div>
             <div id="wrapwrap">
-                <div data-oe-model="model" data-oe-type="html" class="o_editable oe_structure"></div>
+                <main>
+                    <div data-oe-model="model" data-oe-type="html" class="o_editable oe_structure"></div>
+                </main>
             </div>
             <script type="text/javascript">
                 odoo.define('web_editor.wysiwyg.iniframe', function (require) {
@@ -396,7 +398,7 @@
                     <div class="o_yt_option o_vim_option">
                         <label class="o_switch mb0"><input id="o_video_loop" type="checkbox"/><span/>Loop</label>
                     </div>
-                    <div class="o_yt_option o_dm_option">
+                    <div class="o_yt_option o_dm_option o_vim_option">
                         <label class="o_switch mb0"><input id="o_video_hide_controls" type="checkbox"/><span/>Hide player controls</label>
                     </div>
                     <div class="o_yt_option">

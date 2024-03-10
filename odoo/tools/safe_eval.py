@@ -24,8 +24,7 @@ import logging
 import sys
 import werkzeug
 
-from .misc import ustr
-from . import pycompat
+from . import ustr, pycompat, wrap_values
 
 import odoo
 
@@ -71,6 +70,8 @@ _CONST_OPCODES = set(opmap[x] for x in [
     # until Python 3.5, literal maps are compiled to creating an empty map
     # (pre-sized) then filling it key by key
     'STORE_MAP',
+    # 3.9
+    'LIST_EXTEND', 'SET_UPDATE',
 ] if x in opmap)
 
 # operations on literal values
@@ -89,6 +90,9 @@ _EXPR_OPCODES = _CONST_OPCODES.union(set(opmap[x] for x in [
     # comprehensions
     'LIST_APPEND', 'MAP_ADD', 'SET_ADD',
     'COMPARE_OP',
+    # specialised comparisons
+    'IS_OP', 'CONTAINS_OP',
+    'DICT_MERGE', 'DICT_UPDATE',
 ] if x in opmap))
 
 _SAFE_OPCODES = _EXPR_OPCODES.union(set(opmap[x] for x in [
@@ -104,12 +108,15 @@ _SAFE_OPCODES = _EXPR_OPCODES.union(set(opmap[x] for x in [
     'CALL_METHOD', 'LOAD_METHOD',
     'GET_ITER', 'FOR_ITER', 'YIELD_VALUE',
     'JUMP_FORWARD', 'JUMP_IF_TRUE', 'JUMP_IF_FALSE', 'JUMP_ABSOLUTE',
+    # Added in P3.8: https://bugs.python.org/issue17611
+    'BEGIN_FINALLY', 'CALL_FINALLY', 'POP_FINALLY',
     # New in Python 2.7 - http://bugs.python.org/issue4715 :
     'JUMP_IF_FALSE_OR_POP', 'JUMP_IF_TRUE_OR_POP', 'POP_JUMP_IF_FALSE',
     'POP_JUMP_IF_TRUE', 'SETUP_EXCEPT', 'SETUP_FINALLY', 'END_FINALLY',
     'RAISE_VARARGS', 'LOAD_NAME', 'STORE_NAME', 'DELETE_NAME', 'LOAD_ATTR',
     'LOAD_FAST', 'STORE_FAST', 'DELETE_FAST', 'UNPACK_SEQUENCE',
     'LOAD_GLOBAL', # Only allows access to restricted globals
+    'RERAISE', 'JUMP_IF_NOT_EXC_MATCH',
 ] if x in opmap))
 
 _logger = logging.getLogger(__name__)
@@ -287,6 +294,7 @@ _BUILTINS = {
     'sum': sum,
     'reduce': functools.reduce,
     'filter': filter,
+    'sorted': sorted,
     'round': round,
     'len': len,
     'repr': repr,
@@ -335,6 +343,9 @@ def safe_eval(expr, globals_dict=None, locals_dict=None, mode="eval", nocopy=Fal
             globals_dict = dict(globals_dict)
         if locals_dict is not None:
             locals_dict = dict(locals_dict)
+
+    wrap_values(globals_dict)
+    wrap_values(locals_dict)
 
     if globals_dict is None:
         globals_dict = {}

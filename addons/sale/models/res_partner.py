@@ -15,7 +15,7 @@ class ResPartner(models.Model):
 
     def _compute_sale_order_count(self):
         # retrieve all children partners and prefetch 'parent_id' on them
-        all_partners = self.search([('id', 'child_of', self.ids)])
+        all_partners = self.with_context(active_test=False).search([('id', 'child_of', self.ids)])
         all_partners.read(['parent_id'])
 
         sale_order_groups = self.env['sale.order'].read_group(
@@ -43,3 +43,9 @@ class ResPartner(models.Model):
             ('state', 'in', ['sent', 'sale', 'done'])
         ], limit=1)
         return can_edit_vat and not bool(has_so)
+
+    def action_view_sale_order(self):
+        action = self.env.ref('sale.act_res_partner_2_sale_order').read()[0]
+        all_child = self.with_context(active_test=False).search([('id', 'child_of', self.ids)])
+        action['domain'] = [('partner_id', 'in', all_child.ids)]
+        return action

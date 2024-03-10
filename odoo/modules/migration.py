@@ -12,7 +12,7 @@ from os.path import join as opj
 
 from odoo.modules.module import get_resource_path
 import odoo.release as release
-import odoo.tools as tools
+import odoo.upgrade
 from odoo.tools.parse_version import parse_version
 
 _logger = logging.getLogger(__name__)
@@ -62,18 +62,17 @@ class MigrationManager(object):
         self._get_files()
 
     def _get_files(self):
-        def _get_upgrades_paths(pkg):
-            for path in tools.config['upgrades_paths'].split(','):
+        def _get_upgrade_path(pkg):
+            for path in odoo.upgrade.__path__:
                 upgrade_path = opj(path, pkg)
                 if os.path.exists(upgrade_path):
-                    return upgrade_path
-            return None
+                    yield upgrade_path
 
         def get_scripts(path):
             if not path:
                 return {}
             return {
-                version: glob.glob1(opj(path, version), '*.py')
+                version: glob.glob(opj(path, version, '*.py'))
                 for version in os.listdir(path)
                 if os.path.isdir(opj(path, version))
             }
@@ -86,10 +85,13 @@ class MigrationManager(object):
             self.migrations[pkg.name] = {
                 'module': get_scripts(get_resource_path(pkg.name, 'migrations')),
                 'module_upgrades': get_scripts(get_resource_path(pkg.name, 'upgrades')),
-                'maintenance': get_scripts(get_resource_path('base', 'maintenance', 'migrations', pkg.name)),
-                'maintenance_upgrades': get_scripts(get_resource_path('base', 'maintenance', 'upgrades', pkg.name)),
-                'upgrades': get_scripts(_get_upgrades_paths(pkg.name)),
             }
+
+            scripts = defaultdict(list)
+            for p in _get_upgrade_path(pkg.name):
+                for v, s in get_scripts(p).items():
+                    scripts[v].extend(s)
+            self.migrations[pkg.name]["upgrade"] = scripts
 
     def migrate_module(self, pkg, stage):
         assert stage in ('pre', 'post', 'end')
@@ -128,39 +130,39 @@ class MigrationManager(object):
             """ return a list of migration script files
             """
             m = self.migrations[pkg.name]
-            lst = []
 
-            mapping = {
-                'module': opj(pkg.name, 'migrations'),
-                'module_upgrades': opj(pkg.name, 'upgrades'),
-                'maintenance': opj('base', 'maintenance', 'migrations', pkg.name),
-                'maintenance_upgrades': opj('base', 'maintenance', 'upgrades', pkg.name),
-            }
-
-            for path in tools.config['upgrades_paths'].split(','):
-                if os.path.exists(opj(path, pkg.name)):
-                    mapping['upgrades'] = opj(path, pkg.name)
-                    break
-
-            for x in mapping:
-                if version in m.get(x):
-                    for f in m[x][version]:
-                        if not f.startswith(stage + '-'):
-                            continue
-                        lst.append(opj(mapping[x], version, f))
-            lst.sort()
-            return lst
+            return sorted(
+                (
+                    f
+                    for k in m
+                    for f in m[k].get(version, [])
+                    if os.path.basename(f).startswith(f"{stage}-")
+                ),
+                key=os.path.basename,
+            )
 
         installed_version = getattr(pkg, 'load_version', pkg.installed_version) or ''
         parsed_installed_version = parse_version(installed_version)
         current_version = parse_version(convert_version(pkg.data['version']))
 
+        def compare(version):
+            if version == "0.0.0" and parsed_installed_version < current_version:
+                return True
+
+            full_version = convert_version(version)
+            majorless_version = (version != full_version)
+
+            if majorless_version:
+                # We should not re-execute major-less scripts when upgrading to new Odoo version
+                # a module in `9.0.2.0` should not re-execute a `2.0` script when upgrading to `10.0.2.0`.
+                # In which case we must compare just the module version
+                return parsed_installed_version[2:] < parse_version(full_version)[2:] <= current_version[2:]
+
+            return parsed_installed_version < parse_version(full_version) <= current_version
+
         versions = _get_migration_versions(pkg, stage)
-
         for version in versions:
-            if ((version == "0.0.0" and parsed_installed_version < current_version)
-               or parsed_installed_version < parse_version(convert_version(version)) <= current_version):
-
+            if compare(version):
                 strfmt = {'addon': pkg.name,
                           'stage': stage,
                           'version': stageformat[stage] % version,

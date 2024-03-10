@@ -72,10 +72,19 @@ class AccountPayment(models.Model):
         if not self[0].journal_id.check_manual_sequencing:
             # The wizard asks for the number printed on the first pre-printed check
             # so payments are attributed the number of the check the'll be printed on.
-            last_printed_check = self.search([
+            def _check_int(payment):
+                number = payment.check_number
+                try:
+                    return int(number)
+                except Exception as e:
+                    return 0
+
+            printed_checks = self.search([
                 ('journal_id', '=', self[0].journal_id.id),
-                ('check_number', '!=', "0")], order="check_number desc", limit=1)
-            next_check_number = last_printed_check and int(last_printed_check.check_number) + 1 or 1
+                ('check_number', '!=', False),
+                ]).sorted(key=_check_int, reverse=True)
+
+            next_check_number = printed_checks and _check_int(printed_checks[0]) + 1 or 1
 
             return {
                 'name': _('Print Pre-numbered Checks'),
@@ -145,7 +154,7 @@ class AccountPayment(models.Model):
 
         multi_stub = self.company_id.account_check_printing_multi_stub
 
-        invoices = self.reconciled_invoice_ids.sorted(key=lambda r: r.invoice_date_due)
+        invoices = self.reconciled_invoice_ids.sorted(key=lambda r: r.invoice_date_due or fields.Date.context_today(self))
         debits = invoices.filtered(lambda r: r.type == 'in_invoice')
         credits = invoices.filtered(lambda r: r.type == 'in_refund')
 
@@ -200,6 +209,6 @@ class AccountPayment(models.Model):
             'number': invoice.ref and invoice.name + ' - ' + invoice.ref or invoice.name,
             'amount_total': formatLang(self.env, invoice_sign * invoice.amount_total, currency_obj=invoice.currency_id),
             'amount_residual': formatLang(self.env, amount_residual, currency_obj=invoice.currency_id) if amount_residual * 10**4 != 0 else '-',
-            'amount_paid': formatLang(self.env, invoice_sign * amount_paid, currency_obj=invoice.currency_id),
+            'amount_paid': formatLang(self.env, invoice_sign * amount_paid, currency_obj=self.currency_id),
             'currency': invoice.currency_id,
         }

@@ -61,7 +61,8 @@ odoo.define('website_form_editor', function (require) {
 
         start: function () {
             this.$target.addClass('o_fake_not_editable').attr('contentEditable', false);
-            this.$target.find('label:not(:has(span)), label span').addClass('o_fake_editable').attr('contentEditable', true);
+            this.$target.find('label:not(:has(span)), label span, .o_form_heading').addClass('o_fake_editable').attr('contentEditable', true);
+            this.$target.find('.o_website_form_send').attr('contentEditable', true);
             return this._super.apply(this, arguments);
         },
 
@@ -98,6 +99,7 @@ odoo.define('website_form_editor', function (require) {
                 ],
             }).then(function (models) {
                 self.models = models;
+                var selectedModel = self.$target.attr('data-model_name') || 'mail.mail';
                 // Models selection input
                 var modelSelection = qweb.render("website_form.field_many2one", {
                     field: {
@@ -108,7 +110,7 @@ odoo.define('website_form_editor', function (require) {
                             return {
                                 id: m.id,
                                 display_name: m.website_form_label || m.name,
-                                selected: (m.model === self.$target.attr('data-model_name')) ? 1 : null,
+                                selected: (m.model === selectedModel) ? 1 : null,
                             };
                         }),
                     }
@@ -268,30 +270,30 @@ odoo.define('website_form_editor', function (require) {
                 records: [
                     {
                         id: 'Option 1',
-                        display_name: 'Option 1'
+                        display_name: _t('Option 1')
                     },
                     {
                         id: 'Option 2',
-                        display_name: 'Option 2'
+                        display_name: _t('Option 2')
                     },
                     {
                         id: 'Option 3',
-                        display_name: 'Option 3'
+                        display_name: _t('Option 3')
                     }
                 ],
                 // Default values for selection fields
                 selection: [
                     [
                         'Option 1',
-                        'Option 1'
+                        _t('Option 1')
                     ],
                     [
                         'Option 2',
-                        'Option 2'
+                        _t('Option 2')
                     ],
                     [
                         'Option 3',
-                        'Option 3'
+                        _t('Option 3')
                     ],
                 ]
             });
@@ -372,6 +374,7 @@ odoo.define('website_form_editor', function (require) {
                         $('<h1>', {
                             class: 'o_form_heading',
                             text: self.activeForm.website_form_label,
+                            contentEditable: true,
                         }).prependTo(self.$target.find('.container'));
                         self.$target.find('.form-group:has(".o_website_form_send")').before($(qweb.render(formInfo.defaultTemplateName)));
                     });
@@ -416,6 +419,9 @@ odoo.define('website_form_editor', function (require) {
             // Prevent saving of the status message  // TODO: would be better on Edit
             this.$target.find('#o_website_form_result').empty();
 
+            // Prevent saving disabled state of send button  // TODO: would be better on Edit
+            this.$target.find('.o_website_form_send').removeClass('disabled').removeAttr('disabled')
+
             // Update values of custom inputs to mirror their labels
             var custom_inputs = this.$target.find('.o_website_form_custom .o_website_form_input');
             _.each(custom_inputs, function (input, index) {
@@ -430,6 +436,14 @@ odoo.define('website_form_editor', function (require) {
                     if (checkbox_label) {
                         input.value = checkbox_label;
                     }
+                }
+            });
+
+            // Clear default values coming from data-for/data-values attributes
+            this.$target.find('input[name],textarea[name]').each(function () {
+                var original = $(this).data('website_form_original_default_value');
+                if (original !== undefined && $(this).val() === original) {
+                    $(this).val('').removeAttr('value');
                 }
             });
         }
@@ -549,7 +563,7 @@ odoo.define('website_form_editor', function (require) {
     // Disable duplicate button for model fields
     options.registry['website_form_editor_field_model'] = disable_overlay_button_option.extend({
         start: function () {
-            this.disable_button('clone', 'You can\'t duplicate a model field.');
+            this.disable_button('clone', _t('You can\'t duplicate a model field.'));
             return this._super.apply(this, arguments);
         }
     });
@@ -557,7 +571,7 @@ odoo.define('website_form_editor', function (require) {
     // Disable delete button for model required fields
     options.registry['website_form_editor_field_required'] = disable_overlay_button_option.extend({
         start: function () {
-            this.disable_button('remove', 'You can\'t remove a field that is required by the model itself.');
+            this.disable_button('remove', _t('You can\'t remove a field that is required by the model itself.'));
             return this._super.apply(this, arguments);
         }
     });
@@ -565,7 +579,7 @@ odoo.define('website_form_editor', function (require) {
     // Disable duplicate button for non-custom checkboxes and radio buttons
     options.registry['website_form_editor_field_x2many'] =disable_overlay_button_option.extend({
         start: function () {
-            this.disable_button('clone', 'You can\'t duplicate an item which refers to an actual record.');
+            this.disable_button('clone', _t('You can\'t duplicate an item which refers to an actual record.'));
             return this._super.apply(this, arguments);
         }
     });

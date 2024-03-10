@@ -48,9 +48,9 @@ list of filtered posts (by date or tag).
 ============================================================================ -->
 <template id="blog_post_short" name="Blog Posts">
     <t t-call="website_blog.index">
-        <t t-set="head" t-if="blog">
-            <link t-att-href="'/blog/%s/feed' % (blog.id)" type="application/atom+xml" rel="alternate" title="Atom Feed"/>
-            <meta t-if="len(active_tag_ids) > 0" name="robots" t-attf-content="#{len(active_tag_ids) > 1 and 'noindex,'} nofollow"/>
+        <t t-set="head">
+            <link t-if="blog" t-att-href="'/blog/%s/feed' % (blog.id)" type="application/atom+xml" rel="alternate" title="Atom Feed"/>
+            <meta t-if="active_tag_ids" name="robots" t-attf-content="none"/>
         </t>
 
         <!-- Check for active options: the stored value may be used in sub-templates too  -->
@@ -438,8 +438,8 @@ list of filtered posts (by date or tag).
                            t-att-data-text="_cp.get('text_size_class')"
                            t-att-data-url="'/blog/' + slug(next_post.blog_id) + '/post/' + slug(next_post) + '?anim'"/>
 
-                        <t t-set="next_cover_is_full" t-value="'cover_full' in _cp.get('resize_class')"/>
-                        <t t-set="next_cover_is_auto" t-value="'cover_auto' in _cp.get('resize_class')"/>
+                        <t t-set="next_cover_is_full" t-value="'cover_full' in _cp.get('resize_class', '')"/>
+                        <t t-set="next_cover_is_auto" t-value="'cover_auto' in _cp.get('resize_class', '')"/>
 
                         <div class="container text-center position-relative h-100 d-flex flex-column flex-grow-1 justify-content-around">
                             <div t-attf-class="o_wblog_post_title">

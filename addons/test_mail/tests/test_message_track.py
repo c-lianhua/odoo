@@ -202,3 +202,80 @@ class TestTracking(common.BaseFunctionalTest, common.MockEmails):
         new_partner = Partner.search([('email', '=', email_new_partner)])
         self.assertTrue(new_partner)
         self.assertEqual(new_partner.company_id, company1)
+
+    def test_track_invalid_selection(self):
+        # Test: Check that initial invalid selection values are allowed when tracking
+        # Create a record with an initially invalid selection value
+        invalid_value = 'I love writing tests!'
+        record = self.env['mail.test.track.selection'].create({
+            'name': 'Test Invalid Selection Values',})
+        
+        record.flush()
+        self.env.cr.execute(
+                """
+                UPDATE mail_test_track_selection
+                   SET type = %s
+                 WHERE id = %s
+                """, [invalid_value, record.id]
+                )
+        record.invalidate_cache()
+        
+        # Write a valid selection value
+        record.write({
+                'type': 'first',
+            })
+
+        tracking_value = self.env['mail.tracking.value'].search([
+            ('mail_message_id', 'in', record.message_ids.ids),
+            ('field', '=', 'type')])
+
+        self.assertEqual(tracking_value.old_value_char, invalid_value)
+
+    def test_track_template(self):
+        # Test: Check that default_* keys are not taken into account in _message_track_post_template
+        magic_code = 'Up-Up-Down-Down-Left-Right-Left-Right-Square-Triangle'
+
+        mt_name_changed = self.env['mail.message.subtype'].create({
+            'name': 'MAGIC CODE WOOP WOOP',
+            'description': 'SPECIAL CONTENT UNLOCKED'
+        })
+        self.env['ir.model.data'].create({
+            'name': 'mt_name_changed',
+            'model': 'mail.message.subtype',
+            'module': 'mail',
+            'res_id': mt_name_changed.id
+        })
+        mail_template = self.env['mail.template'].create({
+            'name': 'SPECIAL CONTENT UNLOCKED',
+            'subject': 'SPECIAL CONTENT UNLOCKED',
+            'model_id': self.env.ref('test_mail.model_mail_test').id,
+            'auto_delete': True,
+            'body_html': '''<div>WOOP WOOP</div>''',
+        })
+
+        def _track_subtype(self, init_values):
+            if 'name' in init_values and init_values['name'] == magic_code:
+                return 'mail.mt_name_changed'
+            return False
+        self.registry('mail.test')._patch_method('_track_subtype', _track_subtype)
+
+        def _track_template(self, changes):
+            res = {}
+            if 'name' in changes:
+                res['name'] = (mail_template, {'composition_mode': 'mass_mail'})
+            return res
+        self.registry('mail.test')._patch_method('_track_template', _track_template)
+
+        cls = type(self.env['mail.test'])
+        self.assertFalse(hasattr(getattr(cls, 'name'), 'track_visibility'))
+        getattr(cls, 'name').track_visibility = 'always'
+
+        @self.addCleanup
+        def cleanup():
+            del getattr(cls, 'name').track_visibility
+
+        test_mail_record = self.env['mail.test'].create({
+            'name': 'Zizizatestmailname',
+            'description': 'Zizizatestmaildescription',
+        })
+        test_mail_record.with_context(default_parent_id=2147483647).write({'name': magic_code})

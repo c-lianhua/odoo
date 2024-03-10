@@ -25,9 +25,10 @@ class ProductTemplate(models.Model):
             'view_mode': 'kanban,form',
             'context': "{'default_res_model': '%s','default_res_id': %d, 'default_product_downloadable': True}" % (self._name, self.id),
             'help': """
-                <p class="o_view_nocontent_smiling_face">Add attachments for this digital product</p>
-                <p>The attached files are the ones that will be purchased and sent to the customer.</p>
-                """,
+                <p class="o_view_nocontent_smiling_face">%s</p>
+                <p>%s</p>
+                """ % (_("Add attachments for this digital product"),
+                       _("The attached files are the ones that will be purchased and sent to the customer.")),
         }
 
 
@@ -40,8 +41,8 @@ class Product(models.Model):
         for product in self:
             product.attachment_count = self.env['ir.attachment'].search_count([
                 '|',
-                ('res_model', '=', 'product.template'), ('res_id', '=', product.product_tmpl_id.id), ('product_downloadable', '=', True),
-                ('res_model', '=', 'product.product'), ('res_id', '=', product.id), ('product_downloadable', '=', True)])
+                '&', '&', ('res_model', '=', 'product.template'), ('res_id', '=', product.product_tmpl_id.id), ('product_downloadable', '=', True),
+                '&', '&', ('res_model', '=', 'product.product'), ('res_id', '=', product.id), ('product_downloadable', '=', True)])
 
     def action_open_attachments(self):
         self.ensure_one()
@@ -55,7 +56,8 @@ class Product(models.Model):
             'view_mode': 'kanban,form',
             'context': "{'default_res_model': '%s','default_res_id': %d, 'default_product_downloadable': True}" % (self._name, self.id),
             'help': """
-                <p class="o_view_nocontent_smiling_face">Add attachments for this digital product</p>
-                <p>The attached files are the ones that will be purchased and sent to the customer.</p>
-                """,
+                <p class="o_view_nocontent_smiling_face">%s</p>
+                <p>%s</p>
+                """ % (_("Add attachments for this digital product"),
+                       _("The attached files are the ones that will be purchased and sent to the customer.")),
         }

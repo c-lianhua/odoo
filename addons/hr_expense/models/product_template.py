@@ -10,12 +10,11 @@ class ProductTemplate(models.Model):
     can_be_expensed = fields.Boolean(string="Can be Expensed", help="Specify whether the product can be selected in an expense.")
 
     @api.model
-    def create(self, vals):
-        # When creating an expense product on the fly, you don't expect to
-        # have taxes on it
-        if vals.get('can_be_expensed', False):
-            vals.update({'supplier_taxes_id': False})
-        return super(ProductTemplate, self).create(vals)
+    def default_get(self, fields):
+        result = super(ProductTemplate, self).default_get(fields)
+        if self.env.context.get('default_can_be_expensed'):
+            result['supplier_taxes_id'] = False
+        return result
 
     @api.onchange('type')
     def _onchange_type_for_expense(self):

@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
+from odoo.tools.misc import get_lang
 
 
 class SaleOrder(models.Model):
@@ -93,13 +94,14 @@ class SaleOrderLine(models.Model):
     # CRUD
     # --------------------------
 
-    @api.model
+    @api.model_create_multi
     def create(self, values):
-        line = super(SaleOrderLine, self).create(values)
+        lines = super(SaleOrderLine, self).create(values)
         # Do not generate purchase when expense SO line since the product is already delivered
-        if line.state == 'sale' and not line.is_expense:
-            line.sudo()._purchase_service_generation()
-        return line
+        lines.filtered(
+            lambda line: line.state == 'sale' and not line.is_expense
+        )._purchase_service_generation()
+        return lines
 
     def write(self, values):
         increased_lines = None
@@ -183,7 +185,7 @@ class SaleOrderLine(models.Model):
             'partner_ref': partner_supplier.ref,
             'company_id': self.company_id.id,
             'currency_id': partner_supplier.property_purchase_currency_id.id or self.env.company.currency_id.id,
-            'dest_address_id': self.order_id.partner_shipping_id.id,
+            'dest_address_id': False, # False since only supported in stock
             'origin': self.order_id.name,
             'payment_term_id': partner_supplier.property_supplier_payment_term_id.id,
             'date_order': date_order,
@@ -219,22 +221,25 @@ class SaleOrderLine(models.Model):
 
         # compute unit price
         price_unit = 0.0
-        if supplierinfo:
-            price_unit = self.env['account.tax'].sudo()._fix_tax_included_price_company(supplierinfo.price, self.product_id.supplier_taxes_id, taxes, self.company_id)
-            if purchase_order.currency_id and supplierinfo.currency_id != purchase_order.currency_id:
-                price_unit = supplierinfo.currency_id.compute(price_unit, purchase_order.currency_id)
 
         # purchase line description in supplier lang
         product_in_supplier_lang = self.product_id.with_context(
             lang=supplierinfo.name.lang,
-            partner_id=supplierinfo.name.id,
         )
-        name = '[%s] %s' % (self.product_id.default_code, product_in_supplier_lang.display_name)
+        if supplierinfo:
+            price_unit = self.env['account.tax'].sudo()._fix_tax_included_price_company(supplierinfo.price, self.product_id.supplier_taxes_id, taxes, self.company_id)
+            if purchase_order.currency_id and supplierinfo.currency_id != purchase_order.currency_id:
+                price_unit = supplierinfo.currency_id.compute(price_unit, purchase_order.currency_id)
+            product_in_supplier_lang = product_in_supplier_lang.with_context(seller_id=supplierinfo.id)
+        else:
+            product_in_supplier_lang = product_in_supplier_lang.with_context(partner_id=purchase_order.partner_id.id)
+
+        name = product_in_supplier_lang.display_name
         if product_in_supplier_lang.description_purchase:
             name += '\n' + product_in_supplier_lang.description_purchase
 
         return {
-            'name': '[%s] %s' % (self.product_id.default_code, self.name) if self.product_id.default_code else self.name,
+            'name': name,
             'product_qty': purchase_qty_uom,
             'product_id': self.product_id.id,
             'product_uom': self.product_id.uom_po_id.id,
@@ -257,8 +262,8 @@ class SaleOrderLine(models.Model):
         for line in self:
             line = line.with_context(force_company=line.company_id.id)
             # determine vendor of the order (take the first matching company and product)
-            # VFE fixme why isn't the _select_seller function used ???
-            suppliers = line.product_id.seller_ids.filtered(lambda vendor: (not vendor.company_id or vendor.company_id == line.company_id) and (not vendor.product_id or vendor.product_id == line.product_id))
+            suppliers = line.product_id.with_context(force_company=line.company_id.id)._select_seller(
+                quantity=line.product_uom_qty, uom_id=line.product_uom)
             if not suppliers:
                 raise UserError(_("There is no vendor associated to the product %s. Please define a vendor for this product.") % (line.product_id.display_name,))
             supplierinfo = suppliers[0]

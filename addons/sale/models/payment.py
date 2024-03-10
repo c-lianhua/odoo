@@ -3,7 +3,7 @@
 import logging
 import re
 
-from odoo import api, fields, models, _
+from odoo import api, fields, models, _, SUPERUSER_ID
 from odoo.tools import float_compare
 
 
@@ -74,7 +74,7 @@ class PaymentTransaction(models.Model):
     def _check_amount_and_confirm_order(self):
         self.ensure_one()
         for order in self.sale_order_ids.filtered(lambda so: so.state in ('draft', 'sent')):
-            if float_compare(self.amount, order.amount_total, 2) == 0:
+            if order.currency_id.compare_amounts(self.amount, order.amount_total) == 0:
                 order.with_context(send_email=True).action_confirm()
             else:
                 _logger.warning(
@@ -113,16 +113,16 @@ class PaymentTransaction(models.Model):
         # invoice the sale orders if needed
         self._invoice_sale_orders()
         res = super(PaymentTransaction, self)._reconcile_after_transaction_done()
-        if self.env['ir.config_parameter'].sudo().get_param('sale.automatic_invoice'):
+        if self.env['ir.config_parameter'].sudo().get_param('sale.automatic_invoice') and any(so.state in ('sale', 'done') for so in self.sale_order_ids):
             default_template = self.env['ir.config_parameter'].sudo().get_param('sale.default_email_template')
             if default_template:
-                for trans in self.filtered(lambda t: t.sale_order_ids):
+                for trans in self.filtered(lambda t: t.sale_order_ids.filtered(lambda so: so.state in ('sale', 'done'))):
                     ctx_company = {'company_id': trans.acquirer_id.company_id.id,
                                    'force_company': trans.acquirer_id.company_id.id,
                                    'mark_invoice_as_sent': True,
                                    }
                     trans = trans.with_context(ctx_company)
-                    for invoice in trans.invoice_ids:
+                    for invoice in trans.invoice_ids.with_user(SUPERUSER_ID):
                         invoice.message_post_with_template(int(default_template), email_layout_xmlid="mail.mail_notification_paynow")
         return res
 
@@ -132,9 +132,11 @@ class PaymentTransaction(models.Model):
                 ctx_company = {'company_id': trans.acquirer_id.company_id.id,
                                'force_company': trans.acquirer_id.company_id.id}
                 trans = trans.with_context(**ctx_company)
-                trans.sale_order_ids._force_lines_to_invoice_policy_order()
-                invoices = trans.sale_order_ids._create_invoices()
-                trans.invoice_ids = [(6, 0, invoices.ids)]
+                confirmed_orders = trans.sale_order_ids.filtered(lambda so: so.state in ('sale', 'done'))
+                if confirmed_orders:
+                    confirmed_orders._force_lines_to_invoice_policy_order()
+                    invoices = confirmed_orders._create_invoices()
+                    trans.invoice_ids = [(6, 0, invoices.ids)]
 
     @api.model
     def _compute_reference_prefix(self, values):
@@ -166,8 +168,8 @@ class PaymentTransaction(models.Model):
 
     def render_sale_button(self, order, submit_txt=None, render_values=None):
         values = {
-            'partner_id': order.partner_shipping_id.id or order.partner_invoice_id.id,
-            'billing_partner_id': order.partner_invoice_id.id,
+            'partner_id': order.partner_id.id,
+            'type': self.type,
         }
         if render_values:
             values.update(render_values)

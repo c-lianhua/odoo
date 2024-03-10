@@ -9,16 +9,20 @@
 # ExcaliberX <excaliberx@gmail.com>, 2019
 # Yihya Hugirat <hugirat@gmail.com>, 2019
 # שהאב חוסיין <shhab89@gmail.com>, 2019
-# hed shefetr <hed@laylinetech.com>, 2019
+# hed shefer <hed@laylinetech.com>, 2019
 # דודי מלכה <Dudimalka6@gmail.com>, 2019
+# ZVI BLONDER <ZVIBLONDER@gmail.com>, 2020
+# Netta Waizer, 2022
+# NoaFarkash, 2022
+# Ha Ketem <haketem@gmail.com>, 2022
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 13.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-10-07 07:13+0000\n"
+"POT-Creation-Date: 2020-04-27 09:22+0000\n"
 "PO-Revision-Date: 2019-08-26 09:15+0000\n"
-"Last-Translator: דודי מלכה <Dudimalka6@gmail.com>, 2019\n"
+"Last-Translator: Ha Ketem <haketem@gmail.com>, 2022\n"
 "Language-Team: Hebrew (https://www.transifex.com/odoo/teams/41243/he/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -31,21 +35,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/image_optimize_dialog.js:0
 #, python-format
 msgid "%d (Original)"
-msgstr ""
+msgstr "%d (מקור)"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/image_optimize_dialog.js:0
 #, python-format
 msgid "%d (Suggested)"
-msgstr ""
+msgstr "%d (מוצע)"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "&times;"
-msgstr "&פעמים;"
+msgstr "&times;"
 
 #. module: web_editor
 #. openerp-web
@@ -61,35 +65,35 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "'Title tag' is shown as a tooltip when you hover the picture."
-msgstr ""
+msgstr "'תגית כותרת' מופיעה כחלונית כשמרחפים מעל התמונה עם העכבר."
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "(ALT Tag)"
-msgstr ""
+msgstr "(תווית חלופית)"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "(TITLE Tag)"
-msgstr ""
+msgstr "(תווית כותרת)"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "(URL or Embed)"
-msgstr ""
+msgstr "(קישור URL או מוטמע)"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "(YouTube, Vimeo, Vine, Instagram, DailyMotion or Youku)"
-msgstr ""
+msgstr "(YouTube, Vimeo, Vine, Instagram, DailyMotion או Youku)"
 
 #. module: web_editor
 #: model_terms:ir.ui.view,arch_db:web_editor.snippets
@@ -104,13 +108,14 @@ msgid ""
 "A server error occured. Please check you correctly signed in and that the "
 "file you are saving is correctly formatted."
 msgstr ""
+"אירעה שגיאת שרת. אנא בדוק שהתחברת כראוי וכי הקובץ שאתה שומר מעוצב כהלכה."
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Accepts"
-msgstr ""
+msgstr "מתקבל"
 
 #. module: web_editor
 #. openerp-web
@@ -131,14 +136,14 @@ msgstr "הוסף"
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/media.js:0
 #, python-format
 msgid "Add as document"
-msgstr ""
+msgstr "הוסף כמסמך"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/media.js:0
 #, python-format
 msgid "Add as image"
-msgstr ""
+msgstr "הוסף כתמונה"
 
 #. module: web_editor
 #. openerp-web
@@ -146,7 +151,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Add document"
-msgstr ""
+msgstr "הוסף מסמך"
 
 #. module: web_editor
 #. openerp-web
@@ -154,61 +159,61 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Add image"
-msgstr ""
+msgstr "הוסף תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Align center"
-msgstr ""
+msgstr "יישר למרכז"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Align left"
-msgstr ""
+msgstr "יישר לשמאל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Align right"
-msgstr ""
+msgstr "יישר לימין"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "All SCSS Files"
-msgstr ""
+msgstr "קבצי All SCSS"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "All images have been loaded"
-msgstr ""
+msgstr "כל התמונות נטענו"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/media.js:0
 #, python-format
 msgid "Are you sure you want to delete this file ?"
-msgstr ""
+msgstr "האם אתה בטוח שברצונך למחוק קובץ זה?"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Aspect Ratio"
-msgstr ""
+msgstr "יחס גובה-רוחב"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_web_editor_assets
 msgid "Assets Utils"
-msgstr ""
+msgstr "נכסים שימושיים"
 
 #. module: web_editor
 #. openerp-web
@@ -225,7 +230,7 @@ msgstr "קובץ מצורף"
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_ir_attachment__local_url
 msgid "Attachment URL"
-msgstr "URL כתובת הקובץ להעלאה"
+msgstr "כתובת אתר לקובץ מצורף"
 
 #. module: web_editor
 #. openerp-web
@@ -239,7 +244,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Autoplay"
-msgstr "ניגון אוטומטי"
+msgstr "הפעלה אוטומטית"
 
 #. module: web_editor
 #. openerp-web
@@ -253,21 +258,21 @@ msgstr "צבע רקע"
 #: code:addons/web_editor/static/src/js/editor/snippets.options.js:0
 #, python-format
 msgid "Background Image Sizing"
-msgstr ""
+msgstr "גודל תמונה ברקע"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Background height"
-msgstr ""
+msgstr "גובה רקע"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Background position"
-msgstr ""
+msgstr "מיקום רקע"
 
 #. module: web_editor
 #. openerp-web
@@ -281,47 +286,47 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Background size"
-msgstr ""
+msgstr "גודל רקע"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Background width"
-msgstr ""
+msgstr "רוחב רקע"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/snippets.editor.js:0
 #, python-format
 msgid "Block"
-msgstr "חסום"
+msgstr "בלוק"
 
 #. module: web_editor
 #: model_terms:ir.ui.view,arch_db:web_editor.snippets
 msgid "Blocks"
-msgstr ""
+msgstr "בלוקים"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Bold"
-msgstr ""
+msgstr "מודגש"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/common/ace.js:0
 #, python-format
 msgid "Careful !"
-msgstr ""
+msgstr "זהירות !"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Center"
-msgstr ""
+msgstr "מרכז"
 
 #. module: web_editor
 #. openerp-web
@@ -342,17 +347,18 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/summernote.js:0
 #, python-format
 msgid "Checklist"
-msgstr ""
+msgstr "רשימת תיוג"
 
 #. module: web_editor
 #: model_terms:ir.ui.view,arch_db:web_editor.snippets
 msgid "Click in the page to customize"
-msgstr ""
+msgstr "לחץ בדף להתאמה אישית"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/crop_dialog.js:0
+#: code:addons/web_editor/static/src/xml/ace.xml:0
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "Close"
@@ -384,7 +390,7 @@ msgstr "צבע"
 #: code:addons/web_editor/static/src/js/editor/snippets.editor.js:0
 #, python-format
 msgid "Column"
-msgstr ""
+msgstr "עמודה"
 
 #. module: web_editor
 #. openerp-web
@@ -392,28 +398,28 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg_colorpicker.xml:0
 #, python-format
 msgid "Common colors"
-msgstr ""
+msgstr "צבעים נפוצים"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Contain"
-msgstr ""
+msgstr "מכיל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Copy-paste your URL or embed code here"
-msgstr ""
+msgstr "כאן עושים העתקה-הדבקה של קישור URL או של קוד הטמעה "
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Cover"
-msgstr ""
+msgstr "שער"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__create_uid
@@ -431,14 +437,14 @@ msgstr "נוצר ב-"
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/crop_dialog.js:0
 #, python-format
 msgid "Crop Image"
-msgstr ""
+msgstr "חתוך תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Custom"
-msgstr "מותאם"
+msgstr "מותאם אישית"
 
 #. module: web_editor
 #. openerp-web
@@ -452,7 +458,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Dailymotion"
-msgstr ""
+msgstr "Dailymotion"
 
 #. module: web_editor
 #. openerp-web
@@ -504,28 +510,28 @@ msgstr "מסמך"
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Document Style"
-msgstr ""
+msgstr "סגנון מסמך"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Double-click to edit"
-msgstr ""
+msgstr "לחץ פעמיים כדי לערוך"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Drag an image here"
-msgstr ""
+msgstr "גרור תמונה לכאן"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/snippets.xml:0
 #, python-format
 msgid "Duplicate Container"
-msgstr "שכפול בלוק"
+msgstr "שכפל קונטיינר"
 
 #. module: web_editor
 #. openerp-web
@@ -540,14 +546,14 @@ msgstr "ערוך"
 #: code:addons/web_editor/static/src/js/common/ace.js:0
 #, python-format
 msgid "Expected "
-msgstr ""
+msgstr "צפוי"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "File / Image"
-msgstr ""
+msgstr "קובץ / תמונה"
 
 #. module: web_editor
 #. openerp-web
@@ -562,21 +568,21 @@ msgstr "מסנן"
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Flat"
-msgstr ""
+msgstr "שטוח"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Flip Horizontal"
-msgstr ""
+msgstr "היפוך אופקי"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Flip Vertical"
-msgstr ""
+msgstr "היפוך אנכי"
 
 #. module: web_editor
 #. openerp-web
@@ -604,7 +610,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Font Color"
-msgstr ""
+msgstr "צבע גופן"
 
 #. module: web_editor
 #. openerp-web
@@ -618,6 +624,13 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Font Size"
+msgstr "גודל גופן"
+
+#. module: web_editor
+#. openerp-web
+#: code:addons/web_editor/static/src/js/editor/snippets.editor.js:0
+#, python-format
+msgid "For technical reasons, this block cannot be dropped here"
 msgstr ""
 
 #. module: web_editor
@@ -632,7 +645,7 @@ msgstr "תבנית"
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/crop_dialog.js:0
 #, python-format
 msgid "Free"
-msgstr "פנוי"
+msgstr "חינם"
 
 #. module: web_editor
 #. openerp-web
@@ -646,14 +659,14 @@ msgstr "מסך מלא"
 #: code:addons/web_editor/static/src/xml/backend.xml:0
 #, python-format
 msgid "Fullscreen"
-msgstr ""
+msgstr "מסך מלא"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Give a relevant name to your file to optimize search engine results."
-msgstr ""
+msgstr "תן שם רלוונטי לקובץ שלך בכדי לייעל את תוצאות מנועי החיפוש."
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_http
@@ -665,42 +678,42 @@ msgstr "ניתוב HTTP"
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Header 1"
-msgstr ""
+msgstr "כותרת עליונה 1"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Header 2"
-msgstr ""
+msgstr "כותרת עליונה 2"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Header 3"
-msgstr ""
+msgstr "כותרת עליונה 3"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Header 4"
-msgstr ""
+msgstr "כותרת עליונה 4"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Header 5"
-msgstr ""
+msgstr "כותרת עליונה 5"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Header 6"
-msgstr ""
+msgstr "כותרת עליונה 6"
 
 #. module: web_editor
 #. openerp-web
@@ -749,27 +762,27 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Hide sharing button"
-msgstr ""
+msgstr "הסתר את כפתור השיתוף"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Horizontal"
-msgstr ""
+msgstr "אופקי"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/backend/field_html.js:0
 #, python-format
 msgid "Html"
-msgstr ""
+msgstr "Html"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_assets__id
 #: model:ir.model.fields,field_description:web_editor.field_web_editor_converter_test_sub__id
 msgid "ID"
-msgstr "תעודה מזהה"
+msgstr "מזהה"
 
 #. module: web_editor
 #. openerp-web
@@ -779,6 +792,8 @@ msgid ""
 "If you discard the current edition, all unsaved changes will be lost. You "
 "can cancel to return to the edition mode."
 msgstr ""
+"אם תבטל את הגרסה הנוכחית, כל השינויים שלא נשמרו יאבדו. אתה יכול לבטל כדי "
+"לחזור למצב עריכה."
 
 #. module: web_editor
 #. openerp-web
@@ -788,6 +803,8 @@ msgid ""
 "If you edit and save this file, you will never receive updates from Odoo "
 "anymore unless you reset your customizations."
 msgstr ""
+"אם תערוך ותשמור קובץ זה, לעולם לא תקבל עדכונים מ- Odoo אלא אם תאפס את "
+"ההתאמות האישיות שלך."
 
 #. module: web_editor
 #. openerp-web
@@ -797,6 +814,8 @@ msgid ""
 "If you reset this file, all your customizations will be lost as it will be "
 "reverted to the default file."
 msgstr ""
+"אם תאפס קובץ זה, כל ההתאמות האישיות שלך יאבדו מכיוון שהוא יוחזר לקובץ ברירת "
+"המחדל."
 
 #. module: web_editor
 #. openerp-web
@@ -805,7 +824,7 @@ msgstr ""
 msgid ""
 "If you want to crop it, please first download it from the original source "
 "and upload it in Odoo."
-msgstr ""
+msgstr "אם ברצונך לחתוך אותו, אנא הורד אותו תחילה מהמקור והעלה אותו ב- Odoo."
 
 #. module: web_editor
 #. openerp-web
@@ -817,38 +836,38 @@ msgstr "תמונה"
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_ir_attachment__image_height
 msgid "Image Height"
-msgstr ""
+msgstr "גובה תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Image Preview"
-msgstr ""
+msgstr "תצוגה מקדימה של תמונה"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_ir_attachment__image_src
 msgid "Image Src"
-msgstr ""
+msgstr "מקור תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Image URL"
-msgstr ""
+msgstr "כתובת תמונה"
 
 #. module: web_editor
 #: model:ir.model.fields,field_description:web_editor.field_ir_attachment__image_width
 msgid "Image Width"
-msgstr ""
+msgstr "רוחב תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/image_optimize_dialog.js:0
 #, python-format
 msgid "Improve your Image"
-msgstr ""
+msgstr "שפר את התמונה שלך"
 
 #. module: web_editor
 #. openerp-web
@@ -869,35 +888,41 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Insert Image"
-msgstr ""
+msgstr "הוסף תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Insert Link"
-msgstr ""
+msgstr "הוסף קישור"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Insert Video"
-msgstr ""
+msgstr "הוסף סרטון"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/snippets.editor.js:0
 #, python-format
 msgid "Install"
-msgstr "להתקין"
+msgstr "התקן"
+
+#. module: web_editor
+#: code:addons/web_editor/models/ir_ui_view.py:0
+#, python-format
+msgid "Invalid field value for %s: %s"
+msgstr ""
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Italic"
-msgstr ""
+msgstr "נטוי"
 
 #. module: web_editor
 #. openerp-web
@@ -925,14 +950,14 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/image_optimize_dialog.js:0
 #, python-format
 msgid "Keep Original"
-msgstr ""
+msgstr "שמור על המקור"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Keyboard shortcuts"
-msgstr ""
+msgstr "קיצורי מקלדת"
 
 #. module: web_editor
 #. openerp-web
@@ -963,7 +988,7 @@ msgstr "עדכון אחרון ב"
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Line Height"
-msgstr ""
+msgstr "גובה קו"
 
 #. module: web_editor
 #. openerp-web
@@ -977,21 +1002,21 @@ msgstr "קישור"
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Link Label"
-msgstr ""
+msgstr "קשר תווית"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/link_dialog.js:0
 #, python-format
 msgid "Link to"
-msgstr "קישור אל"
+msgstr "קשר ל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Load more..."
-msgstr ""
+msgstr "טען עוד..."
 
 #. module: web_editor
 #. openerp-web
@@ -1018,17 +1043,24 @@ msgstr "שם"
 
 #. module: web_editor
 #. openerp-web
+#: code:addons/web_editor/static/src/xml/snippets.xml:0
+#, python-format
+msgid "No color"
+msgstr "ללא צבע"
+
+#. module: web_editor
+#. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "No documents found."
-msgstr ""
+msgstr "לא נמצאו מסמכים."
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "No images found."
-msgstr ""
+msgstr "לא נמצאו תמונות."
 
 #. module: web_editor
 #. openerp-web
@@ -1044,21 +1076,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/snippets.xml:0
 #, python-format
 msgid "None"
-msgstr "אף אחד"
+msgstr "ללא"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Normal"
-msgstr "נורמלי "
+msgstr "רגיל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/snippets.options.js:0
 #, python-format
 msgid "Ok"
-msgstr "אישור"
+msgstr "בסדר"
 
 #. module: web_editor
 #. openerp-web
@@ -1087,7 +1119,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Open in new window"
-msgstr "פתיחה בחלון חדש"
+msgstr "פתח בחלון חדש"
 
 #. module: web_editor
 #. openerp-web
@@ -1129,7 +1161,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Outline"
-msgstr ""
+msgstr "קווי מתאר"
 
 #. module: web_editor
 #. openerp-web
@@ -1143,21 +1175,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Padding"
-msgstr ""
+msgstr "מרווח"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Paragraph"
-msgstr ""
+msgstr "פסקה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Paragraph formatting"
-msgstr ""
+msgstr "עיצוב פסקאות"
 
 #. module: web_editor
 #. openerp-web
@@ -1189,7 +1221,7 @@ msgstr "איכות"
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Quick Upload"
-msgstr ""
+msgstr "העלאה מהירה"
 
 #. module: web_editor
 #. openerp-web
@@ -1201,7 +1233,7 @@ msgstr "ציטוט"
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_qweb
 msgid "Qweb"
-msgstr ""
+msgstr "Qweb"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_qweb_field
@@ -1211,7 +1243,7 @@ msgstr ""
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_qweb_field_contact
 msgid "Qweb Field Contact"
-msgstr ""
+msgstr "איש קשר בשדה Qweb"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_ir_qweb_field_date
@@ -1290,7 +1322,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Redo"
-msgstr ""
+msgstr "בצע שוב"
 
 #. module: web_editor
 #. openerp-web
@@ -1318,28 +1350,28 @@ msgstr "הסר"
 #: code:addons/web_editor/static/src/xml/snippets.xml:0
 #, python-format
 msgid "Remove Block"
-msgstr "הסרת בלוק"
+msgstr "הסר בלוק"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Remove Font Style"
-msgstr ""
+msgstr "הסר סגנון גופן"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Remove Image"
-msgstr ""
+msgstr "הסר תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Repeat"
-msgstr "חזרה"
+msgstr "חזור"
 
 #. module: web_editor
 #. openerp-web
@@ -1374,7 +1406,7 @@ msgstr "אפס"
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Reset Image"
-msgstr ""
+msgstr "אפס תמונה"
 
 #. module: web_editor
 #. openerp-web
@@ -1382,21 +1414,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Reset to default"
-msgstr ""
+msgstr "אפס לברירת המחדל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/common/ace.js:0
 #, python-format
 msgid "Reseting views is not supported yet"
-msgstr ""
+msgstr "עדיין לא תומך באיפוס תצוגות"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Resize Full"
-msgstr ""
+msgstr "שינוי גודל מלא"
 
 #. module: web_editor
 #. openerp-web
@@ -1417,28 +1449,28 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Resizing is not supported for images of type"
-msgstr ""
+msgstr "שינוי גודל אינו נתמך לתמונות מהסוג"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Rotate Left"
-msgstr ""
+msgstr "סובב שמאלה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Rotate Right"
-msgstr ""
+msgstr "סובב ימינה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Rounded"
-msgstr ""
+msgstr "מעוגל"
 
 #. module: web_editor
 #. openerp-web
@@ -1469,21 +1501,21 @@ msgstr "שמור"
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Search"
-msgstr "חיפוש"
+msgstr "חפש"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/snippets.xml:0
 #, python-format
 msgid "Search Contact"
-msgstr ""
+msgstr "חפש איש קשר"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Search a document"
-msgstr ""
+msgstr "חפש מסמך"
 
 #. module: web_editor
 #. openerp-web
@@ -1497,14 +1529,14 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Search an image"
-msgstr ""
+msgstr "חפש תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/wysiwyg/widgets/media_dialog.js:0
 #, python-format
 msgid "Select a Media"
-msgstr "בחירת מדיה"
+msgstr "בחר מדיה"
 
 #. module: web_editor
 #. openerp-web
@@ -1518,7 +1550,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/common/ace.js:0
 #, python-format
 msgid "Server error"
-msgstr ""
+msgstr "שגיאת שרת"
 
 #. module: web_editor
 #. openerp-web
@@ -1541,7 +1573,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Shadow"
-msgstr "צללית"
+msgstr "צל"
 
 #. module: web_editor
 #. openerp-web
@@ -1572,7 +1604,7 @@ msgstr "סיבוב"
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Strikethrough"
-msgstr ""
+msgstr "קו חוצה"
 
 #. module: web_editor
 #. openerp-web
@@ -1601,7 +1633,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Table"
-msgstr "שולחן"
+msgstr "טבלה"
 
 #. module: web_editor
 #. openerp-web
@@ -1664,7 +1696,7 @@ msgid ""
 "               following pages or views:"
 msgstr ""
 "לא ניתן למחוק את התמונה כי היא נמצאת בשימוש\n"
-"               הדפים והתצוגות הבאים:"
+"               בדפים ובתצוגות הבאים:"
 
 #. module: web_editor
 #. openerp-web
@@ -1693,7 +1725,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/js/editor/editor.js:0
 #, python-format
 msgid "This document is not saved!"
-msgstr ""
+msgstr "המסמך לא נשמר!"
 
 #. module: web_editor
 #. openerp-web
@@ -1714,7 +1746,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "This image is an external image"
-msgstr ""
+msgstr "המסמך לא נשמר!"
 
 #. module: web_editor
 #. openerp-web
@@ -1742,7 +1774,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Tooltip"
-msgstr ""
+msgstr "הסבר"
 
 #. module: web_editor
 #. openerp-web
@@ -1761,7 +1793,7 @@ msgstr "תרגום"
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Transparent"
-msgstr ""
+msgstr "שקוף"
 
 #. module: web_editor
 #. openerp-web
@@ -1775,21 +1807,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "URL or Email"
-msgstr ""
+msgstr "כתובת אתר או דוא\"ל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Underline"
-msgstr ""
+msgstr "קו תחתון"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/js/editor/rte.summernote.js:0
 #, python-format
 msgid "Undo"
-msgstr "שחזר"
+msgstr "בטל"
 
 #. module: web_editor
 #. openerp-web
@@ -1817,21 +1849,21 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Upload a document"
-msgstr ""
+msgstr "העלה מסמך"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Upload an image"
-msgstr "העלאת תמונה"
+msgstr "העלה תמונה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/editor.xml:0
 #, python-format
 msgid "Vertical"
-msgstr ""
+msgstr "אנכי"
 
 #. module: web_editor
 #. openerp-web
@@ -1839,7 +1871,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Video"
-msgstr "וידאו"
+msgstr "סרטון"
 
 #. module: web_editor
 #. openerp-web
@@ -1886,7 +1918,7 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Vimeo"
-msgstr ""
+msgstr "Vimeo"
 
 #. module: web_editor
 #: model:ir.model,name:web_editor.model_web_editor_converter_test_sub
@@ -1911,7 +1943,7 @@ msgstr "רוחב"
 #: code:addons/web_editor/static/src/xml/ace.xml:0
 #, python-format
 msgid "XML (HTML)"
-msgstr ""
+msgstr "XML (HTML)"
 
 #. module: web_editor
 #. openerp-web
@@ -1936,6 +1968,7 @@ msgstr ""
 msgid ""
 "You can upload images with the button located in the top left of the screen."
 msgstr ""
+"ניתן להעלות תמונות באמצעות הכפתור הממוקם בפינה השמאלית העליונה של המסך."
 
 #. module: web_editor
 #: code:addons/web_editor/controllers/main.py:0
@@ -1955,35 +1988,35 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Youku"
-msgstr ""
+msgstr "Youku"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Youtube"
-msgstr ""
+msgstr "Youtube"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Zoom In"
-msgstr ""
+msgstr "זום פנימה"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "Zoom Out"
-msgstr ""
+msgstr "להקטין את התצוגה(זום אאוט)"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "and"
-msgstr "וגם"
+msgstr "ו"
 
 #. module: web_editor
 #. openerp-web
@@ -2015,11 +2048,11 @@ msgstr ""
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "px"
-msgstr ""
+msgstr "פיקסל"
 
 #. module: web_editor
 #. openerp-web
 #: code:addons/web_editor/static/src/xml/wysiwyg.xml:0
 #, python-format
 msgid "videos"
-msgstr ""
+msgstr "וידאות"

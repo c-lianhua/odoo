@@ -17,7 +17,8 @@ class MailGroup(http.Controller):
 
     def _get_archives(self, group_id):
         MailMessage = request.env['mail.message']
-        groups = MailMessage._read_group_raw(
+        # use sudo to avoid side-effects due to custom ACLs
+        groups = MailMessage.sudo()._read_group_raw(
             [('model', '=', 'mail.channel'), ('res_id', '=', group_id), ('message_type', '!=', 'notification')],
             ['subject', 'date'],
             groupby=["date"], orderby="date desc")
@@ -44,9 +45,13 @@ class MailGroup(http.Controller):
 
         # compute statistics
         month_date = datetime.today() - relativedelta.relativedelta(months=1)
-        messages = request.env['mail.message'].read_group(
-            [('model', '=', 'mail.channel'), ('date', '>=', fields.Datetime.to_string(month_date)), ('message_type', '!=', 'notification')],
-            [], ['res_id'])
+        # use sudo to avoid side-effects due to custom ACLs
+        messages = request.env['mail.message'].sudo().read_group([
+            ('model', '=', 'mail.channel'),
+            ('date', '>=', fields.Datetime.to_string(month_date)),
+            ('message_type', '!=', 'notification'),
+            ('res_id', 'in', groups.ids),
+        ], ['res_id'], ['res_id'])
         message_data = dict((message['res_id'], message['res_id_count']) for message in messages)
 
         group_data = dict(
@@ -111,7 +116,7 @@ class MailGroup(http.Controller):
 
         else:
             # public users will recieve confirmation email
-            partner_ids = [p.id for p in self.env['mail.thread'].sudo()._mail_find_partner_from_emails([email], records=channel.sudo(), check_followers=True) if p]
+            partner_ids = [p.id for p in request.env['mail.thread'].sudo()._mail_find_partner_from_emails([email], records=channel.sudo()) if p]
             if not partner_ids or not partner_ids[0]:
                 name = email.split('@')[0]
                 partner_ids = [request.env['res.partner'].sudo().create({'name': name, 'email': email}).id]

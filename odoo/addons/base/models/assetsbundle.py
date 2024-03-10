@@ -13,11 +13,13 @@ except ImportError:
     # If the `sass` python library isn't found, we fallback on the
     # `sassc` executable in the path.
     libsass = None
+from contextlib import closing
 from datetime import datetime
 from subprocess import Popen, PIPE
 from collections import OrderedDict
 from odoo import fields, tools, SUPERUSER_ID
 from odoo.tools.pycompat import to_text
+from odoo.tools.misc import file_open
 from odoo.http import request
 from odoo.modules.module import get_resource_path
 from .qweb import escape
@@ -26,6 +28,8 @@ from odoo.tools import func, misc
 
 import logging
 _logger = logging.getLogger(__name__)
+
+EXTENSIONS = (".js", ".css", ".scss", ".sass", ".less")
 
 
 class CompileError(RuntimeError): pass
@@ -209,6 +213,18 @@ class AssetsBundle(object):
             **self._get_asset_url_values(id=id, unique=unique, extra=extra, name=name, sep=sep, type=type)
         )
 
+    def _unlink_attachments(self, attachments):
+        """ Unlinks attachments without actually calling unlink, so that the ORM cache is not cleared.
+
+        Specifically, if an attachment is generated while a view is rendered, clearing the ORM cache
+        could unload fields loaded with a sudo(), and expected to be readable by the view.
+        Such a view would be website.layout when main_object is an ir.ui.view.
+        """
+        to_delete = set(attach.store_fname for attach in attachments if attach.store_fname)
+        self.env.cr.execute(f"DELETE FROM {attachments._table} WHERE id IN %s", [tuple(attachments.ids)])
+        for file_path in to_delete:
+            attachments._file_delete(file_path)
+
     def clean_attachments(self, type):
         """ Takes care of deleting any outdated ir.attachment records associated to a bundle before
         saving a fresh one.
@@ -234,7 +250,7 @@ class AssetsBundle(object):
         # avoid to invalidate cache if it's already empty (mainly useful for test)
 
         if attachments:
-            attachments.unlink()
+            self._unlink_attachments(attachments)
             # force bundle invalidation on other workers
             self.env['ir.qweb'].clear_caches()
 
@@ -334,45 +350,81 @@ class AssetsBundle(object):
         return attachments
 
     def dialog_message(self, message):
+        """
+        Returns a JS script which shows a warning to the user on page load.
+        TODO: should be refactored to be a base js file whose code is extended
+              by related apps (web/website).
+        """
         return """
             (function (message) {
-                if (window.__assetsBundleErrorSeen) return;
+                'use strict';
+
+                if (window.__assetsBundleErrorSeen) {
+                    return;
+                }
                 window.__assetsBundleErrorSeen = true;
 
-                var loaded = function () {
-                    clearTimeout(loadedTimeout);
-                    var alertTimeout = setTimeout(alert.bind(window, message), 0);
-                    var odoo = window.top.odoo;
-                    if (!odoo || !odoo.define) return;
+                if (document.readyState !== 'loading') {
+                    onDOMContentLoaded();
+                } else {
+                    window.addEventListener('DOMContentLoaded', () => onDOMContentLoaded());
+                }
 
-                    odoo.define("AssetsBundle.ErrorMessage", function (require) {
-                        "use strict";
+                async function onDOMContentLoaded() {
+                    var odoo = window.top.odoo;
+                    if (!odoo || !odoo.define) {
+                        useAlert();
+                        return;
+                    }
+
+                    // Wait for potential JS loading
+                    await new Promise(resolve => {
+                        const noLazyTimeout = setTimeout(() => resolve(), 10); // 10 since need to wait for promise resolutions of odoo.define
+                        odoo.define('AssetsBundle.PotentialLazyLoading', function (require) {
+                            'use strict';
+
+                            const lazyloader = require('web.public.lazyloader');
+
+                            clearTimeout(noLazyTimeout);
+                            lazyloader.allScriptsLoaded.then(() => resolve());
+                        });
+                    });
+
+                    var alertTimeout = setTimeout(useAlert, 10); // 10 since need to wait for promise resolutions of odoo.define
+                    odoo.define('AssetsBundle.ErrorMessage', function (require) {
+                        'use strict';
 
                         require('web.dom_ready');
-                        var core = require("web.core");
-                        var Dialog = require("web.Dialog");
+                        var core = require('web.core');
+                        var Dialog = require('web.Dialog');
 
                         var _t = core._t;
 
                         clearTimeout(alertTimeout);
-
                         new Dialog(null, {
                             title: _t("Style error"),
-                            $content: $("<div/>")
-                                .append($("<p/>", {text: _t("The style compilation failed, see the error below. Your recent actions may be the cause, please try reverting the changes you made.")}))
-                                .append($("<pre/>", {html: message})),
+                            $content: $('<div/>')
+                                .append($('<p/>', {text: _t("The style compilation failed, see the error below. Your recent actions may be the cause, please try reverting the changes you made.")}))
+                                .append($('<pre/>', {html: message})),
                         }).open();
                     });
                 }
 
-                var loadedTimeout = setTimeout(loaded, 5000);
-                document.addEventListener("DOMContentLoaded", loaded);
+                function useAlert() {
+                    window.alert(message);
+                }
             })("%s");
         """ % message.replace('"', '\\"').replace('\n', '&NewLine;')
 
+    def _get_assets_domain_for_already_processed_css(self, assets):
+        """ Method to compute the attachments' domain to search the already process assets (css).
+        This method was created to be overridden.
+        """
+        return [('url', 'in', list(assets.keys()))]
+
     def is_css_preprocessed(self):
         preprocessed = True
-        attachments = None
+        old_attachments = self.env['ir.attachment'].sudo()
         asset_types = [SassStylesheetAsset, ScssStylesheetAsset, LessStylesheetAsset]
         if self.user_direction == 'rtl':
             asset_types.append(StylesheetAsset)
@@ -381,8 +433,9 @@ class AssetsBundle(object):
             outdated = False
             assets = dict((asset.html_url, asset) for asset in self.stylesheets if isinstance(asset, atype))
             if assets:
-                assets_domain = [('url', 'in', list(assets.keys()))]
+                assets_domain = self._get_assets_domain_for_already_processed_css(assets)
                 attachments = self.env['ir.attachment'].sudo().search(assets_domain)
+                old_attachments += attachments
                 for attachment in attachments:
                     asset = assets[attachment.url]
                     if asset.last_modified > attachment['__last_update']:
@@ -399,7 +452,7 @@ class AssetsBundle(object):
                 if outdated:
                     preprocessed = False
 
-        return preprocessed, attachments
+        return preprocessed, old_attachments
 
     def preprocess_css(self, debug=False, old_attachments=None):
         """
@@ -423,7 +476,7 @@ class AssetsBundle(object):
                 compiled = self.run_rtlcss(compiled)
 
             if not self.css_errors and old_attachments:
-                old_attachments.unlink()
+                self._unlink_attachments(old_attachments)
                 old_attachments = None
 
             fragments = self.rx_css_split.split(compiled)
@@ -441,7 +494,7 @@ class AssetsBundle(object):
                         fname = os.path.basename(asset.url)
                         url = asset.html_url
                         with self.env.cr.savepoint():
-                            self.env['ir.attachment'].sudo().with_context(not_force_website_id=True).create(dict(
+                            self.env['ir.attachment'].sudo().create(dict(
                                 datas=base64.b64encode(asset.content.encode('utf8')),
                                 mimetype='text/css',
                                 type='binary',
@@ -626,7 +679,7 @@ class WebAsset(object):
         try:
             self.stat()
             if self._filename:
-                with open(self._filename, 'rb') as fp:
+                with closing(file_open(self._filename, 'rb', filter_ext=EXTENSIONS)) as fp:
                     return fp.read().decode('utf-8')
             else:
                 return base64.b64decode(self._ir_attach['datas']).decode('utf-8')

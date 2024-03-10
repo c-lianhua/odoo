@@ -55,7 +55,7 @@ class SaleOrder(models.Model):
 
                 # create or find product variant from combination
                 product = product_template._create_product_variant(combination)
-                order_lines = self.order_line.filtered(lambda line: line.product_id == product and line.product_no_variant_attribute_value_ids == no_variant_attribute_values)
+                order_lines = self.order_line.filtered(lambda line: (line._origin or line).product_id == product and (line._origin or line).product_no_variant_attribute_value_ids == no_variant_attribute_values)
 
                 # if product variant already exist in order lines
                 old_qty = sum(order_lines.mapped('product_uom_qty'))
@@ -83,7 +83,7 @@ class SaleOrder(models.Model):
                         Therefore, it only raises an Error for now.
                         """
                         if len(order_lines) > 1:
-                            raise ValidationError(_("You cannot change the quantity of a product present in multiple purchase lines."))
+                            raise ValidationError(_("You cannot change the quantity of a product present in multiple sale lines."))
                         else:
                             order_lines[0].product_uom_qty = qty
                             # If we want to support multiple lines edition:
@@ -96,6 +96,9 @@ class SaleOrder(models.Model):
                     if not default_so_line_vals:
                         OrderLine = self.env['sale.order.line']
                         default_so_line_vals = OrderLine.default_get(OrderLine._fields.keys())
+                    last_sequence = self.order_line[-1:].sequence
+                    if last_sequence:
+                        default_so_line_vals['sequence'] = last_sequence
                     new_lines.append((0, 0, dict(
                         default_so_line_vals,
                         product_id=product.id,
@@ -103,9 +106,13 @@ class SaleOrder(models.Model):
                         product_no_variant_attribute_value_ids=no_variant_attribute_values.ids)
                     ))
             if new_lines:
+                res = False
                 self.update(dict(order_line=new_lines))
                 for line in self.order_line.filtered(lambda line: line.product_template_id == product_template):
-                    line.product_id_change()
+                    res = line.product_id_change() or res
+                    line._onchange_discount()
+                    line._onchange_product_id_set_customer_lead()
+                return res
 
     def _get_matrix(self, product_template):
         """Return the matrix of the given product, updated with current SOLines quantities.

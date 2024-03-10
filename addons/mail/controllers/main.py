@@ -90,7 +90,7 @@ class MailController(http.Controller):
                     #   redirect to the messaging.
                     suggested_company = record_sudo._get_mail_redirect_suggested_company()
                     if not suggested_company:
-                        raise AccessError()
+                        raise AccessError('')
                     cids = cids + [suggested_company.id]
                     record_sudo.with_user(uid).with_context(allowed_company_ids=cids).check_access_rule('read')
             except AccessError:
@@ -100,7 +100,17 @@ class MailController(http.Controller):
         else:
             record_action = record_sudo.get_access_action()
             if record_action['type'] == 'ir.actions.act_url' and record_action.get('target_type') != 'public':
-                return cls._redirect_to_messaging()
+                url_params = {
+                    'model': model,
+                    'id': res_id,
+                    'active_id': res_id,
+                    'action': record_action.get('id'),
+                }
+                view_id = record_sudo.get_formview_id()
+                if view_id:
+                    url_params['view_id'] = view_id
+                url = '/web/login?redirect=#%s' % url_encode(url_params)
+                return werkzeug.utils.redirect(url)
 
         record_action.pop('target_type', None)
         # the record has an URL redirection: use it directly
@@ -125,25 +135,12 @@ class MailController(http.Controller):
         url = '/web?#%s' % url_encode(url_params)
         return werkzeug.utils.redirect(url)
 
-    @http.route('/mail/receive', type='json', auth='none')
-    def receive(self, req):
-        """ End-point to receive mail from an external SMTP server. """
-        dbs = req.jsonrequest.get('databases')
-        for db in dbs:
-            message = base64.b64decode(dbs[db])
-            try:
-                db_registry = registry(db)
-                with db_registry.cursor() as cr:
-                    env = api.Environment(cr, SUPERUSER_ID, {})
-                    env['mail.thread'].message_process(None, message)
-            except psycopg2.Error:
-                pass
-        return True
-
     @http.route('/mail/read_followers', type='json', auth='user')
     def read_followers(self, follower_ids, res_model):
         followers = []
-        is_editable = request.env['mail.followers'].user_has_groups('base.group_no_one')
+        # When editing the followers, the "pencil" icon that leads to the edition of subtypes
+        # should be always be displayed and not only when "debug" mode is activated.
+        is_editable = True
         partner_id = request.env.user.partner_id
         follower_id = None
         follower_recs = request.env['mail.followers'].sudo().browse(follower_ids)
@@ -155,6 +152,7 @@ class MailController(http.Controller):
             followers.append({
                 'id': follower.id,
                 'name': follower.partner_id.name or follower.channel_id.name,
+                'display_name': follower.partner_id.display_name or follower.channel_id.display_name,
                 'email': follower.partner_id.email if follower.partner_id else None,
                 'res_model': 'res.partner' if follower.partner_id else 'mail.channel',
                 'res_id': follower.partner_id.id or follower.channel_id.id,

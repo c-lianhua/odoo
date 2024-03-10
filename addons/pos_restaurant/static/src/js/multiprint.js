@@ -125,6 +125,18 @@ models.Orderline = models.Orderline.extend({
     },
 });
 
+var _super_posModel = models.PosModel.prototype;
+
+models.PosModel = models.PosModel.extend({
+    _save_to_server: function (orders, options) {
+        orders.forEach(function(order){
+            if(order.data.multiprint_resume && typeof(order.data.multiprint_resume) === "object")
+                order.data.multiprint_resume = JSON.stringify(order.data.multiprint_resume? order.data.multiprint_resume : false);
+        });
+        return _super_posModel._save_to_server.apply(this,arguments);
+    }
+});
+
 screens.OrderWidget.include({
     render_orderline: function(orderline) {
         var node = this._super(orderline);
@@ -163,22 +175,16 @@ models.Order = models.Order.extend({
             if (line.mp_skip) {
                 return;
             }
-            var line_hash = line.get_line_diff_hash();
             var qty  = Number(line.get_quantity());
             var note = line.get_note();
             var product_id = line.get_product().id;
-
-            if (typeof resume[line_hash] === 'undefined') {
-                resume[line_hash] = {
-                    qty: qty,
-                    note: note,
-                    product_id: product_id,
-                    product_name_wrapped: line.generate_wrapped_product_name(),
-                };
-            } else {
-                resume[line_hash].qty += qty;
-            }
-
+            var product_resume = product_id in resume ? resume[product_id] : {
+                product_name_wrapped: line.generate_wrapped_product_name(),
+                qties: {},
+            };
+            if (note in product_resume['qties']) product_resume['qties'][note] += qty;
+            else product_resume['qties'][note] = qty;
+            resume[product_id] = product_resume;
         });
         return resume;
     },
@@ -195,49 +201,55 @@ models.Order = models.Order.extend({
         var json        = this.export_as_JSON();
         var add = [];
         var rem = [];
-        var line_hash;
+        var pid, note;
 
-        for ( line_hash in current_res) {
-            var curr = current_res[line_hash];
-            var old  = old_res[line_hash];
+        for (pid in current_res) {
+            for (note in current_res[pid]['qties']) {
+                var curr = current_res[pid];
+                var old  = old_res[pid] || {};
+                var found = pid in old_res && note in old_res[pid]['qties'];
 
-            if (typeof old === 'undefined') {
-                add.push({
-                    'id':       curr.product_id,
-                    'name':     this.pos.db.get_product_by_id(curr.product_id).display_name,
-                    'name_wrapped': curr.product_name_wrapped,
-                    'note':     curr.note,
-                    'qty':      curr.qty,
-                });
-            } else if (old.qty < curr.qty) {
-                add.push({
-                    'id':       curr.product_id,
-                    'name':     this.pos.db.get_product_by_id(curr.product_id).display_name,
-                    'name_wrapped': curr.product_name_wrapped,
-                    'note':     curr.note,
-                    'qty':      curr.qty - old.qty,
-                });
-            } else if (old.qty > curr.qty) {
-                rem.push({
-                    'id':       curr.product_id,
-                    'name':     this.pos.db.get_product_by_id(curr.product_id).display_name,
-                    'name_wrapped': curr.product_name_wrapped,
-                    'note':     curr.note,
-                    'qty':      old.qty - curr.qty,
-                });
+                if (!found) {
+                    add.push({
+                        'id':       pid,
+                        'name':     this.pos.db.get_product_by_id(pid).display_name,
+                        'name_wrapped': curr.product_name_wrapped,
+                        'note':     note,
+                        'qty':      curr['qties'][note],
+                    });
+                } else if (old['qties'][note] < curr['qties'][note]) {
+                    add.push({
+                        'id':       pid,
+                        'name':     this.pos.db.get_product_by_id(pid).display_name,
+                        'name_wrapped': curr.product_name_wrapped,
+                        'note':     note,
+                        'qty':      curr['qties'][note] - old['qties'][note],
+                    });
+                } else if (old['qties'][note] > curr['qties'][note]) {
+                    rem.push({
+                        'id':       pid,
+                        'name':     this.pos.db.get_product_by_id(pid).display_name,
+                        'name_wrapped': curr.product_name_wrapped,
+                        'note':     note,
+                        'qty':      old['qties'][note] - curr['qties'][note],
+                    });
+                }
             }
         }
 
-        for (line_hash in old_res) {
-            if (typeof current_res[line_hash] === 'undefined') {
-                var old = old_res[line_hash];
-                rem.push({
-                    'id':       old.product_id,
-                    'name':     this.pos.db.get_product_by_id(old.product_id).display_name,
-                    'name_wrapped': old.product_name_wrapped,
-                    'note':     old.note,
-                    'qty':      old.qty,
-                });
+        for (pid in old_res) {
+            for (note in old_res[pid]['qties']) {
+                var found = pid in current_res && note in current_res[pid]['qties'];
+                if (!found) {
+                    var old = old_res[pid];
+                    rem.push({
+                        'id':       pid,
+                        'name':     this.pos.db.get_product_by_id(pid).display_name,
+                        'name_wrapped': old.product_name_wrapped,
+                        'note':     note,
+                        'qty':      old['qties'][note],
+                    });
+                }
             }
         }
 
@@ -284,13 +296,13 @@ models.Order = models.Order.extend({
         };
 
     },
-    printChanges: function(){
+    printChanges: async function(){
         var printers = this.pos.printers;
         for(var i = 0; i < printers.length; i++){
             var changes = this.computeChanges(printers[i].config.product_categories_ids);
             if ( changes['new'].length > 0 || changes['cancelled'].length > 0){
                 var receipt = QWeb.render('OrderChangeReceipt',{changes:changes, widget:this});
-                printers[i].print_receipt(receipt);
+                await printers[i].print_receipt(receipt);
             }
         }
     },
@@ -326,10 +338,10 @@ models.Order = models.Order.extend({
 
 var SubmitOrderButton = screens.ActionButtonWidget.extend({
     'template': 'SubmitOrderButton',
-    button_click: function(){
+    button_click: async function(){
         var order = this.pos.get_order();
         if(order.hasChangesToPrint()){
-            order.printChanges();
+            await order.printChanges();
             order.saveChanges();
         }
     },

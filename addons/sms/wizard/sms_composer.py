@@ -7,6 +7,7 @@ from odoo import api, fields, models, _
 from odoo.addons.phone_validation.tools import phone_validation
 from odoo.exceptions import UserError
 from odoo.tools.safe_eval import safe_eval
+from odoo.tools import html2plaintext
 
 
 class SendSMS(models.TransientModel):
@@ -179,9 +180,12 @@ class SendSMS(models.TransientModel):
         subtype_id = self.env['ir.model.data'].xmlid_to_res_id('mail.mt_note')
 
         messages = self.env['mail.message']
+        all_bodies = self._prepare_body_values(records)
+
         for record in records:
-            messages |= record._message_sms(
-                self.body, subtype_id=subtype_id,
+            messages += record._message_sms(
+                all_bodies[record.id],
+                subtype_id=subtype_id,
                 partner_ids=self.partner_ids.ids or False,
                 number_field=self.number_field_name,
                 sms_numbers=self.sanitized_numbers.split(',') if self.sanitized_numbers else None)
@@ -276,7 +280,7 @@ class SendSMS(models.TransientModel):
     def _prepare_log_body_values(self, sms_records_values):
         result = {}
         for record_id, sms_values in sms_records_values.items():
-            result[record_id] = sms_values['body']
+            result[record_id] = html2plaintext(sms_values['body'])
         return result
 
     def _prepare_mass_log_values(self, records, sms_records_values):

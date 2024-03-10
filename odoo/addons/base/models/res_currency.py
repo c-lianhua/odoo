@@ -8,6 +8,8 @@ import time
 import traceback
 
 from odoo import api, fields, models, tools, _
+from odoo.tools.misc import get_lang
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -45,6 +47,12 @@ class Currency(models.Model):
         ('rounding_gt_zero', 'CHECK (rounding>0)', 'The rounding factor must be greater than 0!')
     ]
 
+    @api.constrains('active')
+    def _check_company_currency_stays_active(self):
+        currencies = self.filtered(lambda c: not c.active)
+        if self.env['res.company'].search([('currency_id', 'in', currencies.ids)]):
+            raise UserError(_("This currency is set on a company and therefore must be active."))
+
     def _get_rates(self, company, date):
         self.env['res.currency.rate'].flush(['rate', 'currency_id', 'company_id', 'name'])
         query = """SELECT c.id,
@@ -61,7 +69,7 @@ class Currency(models.Model):
 
     @api.depends('rate_ids.rate')
     def _compute_current_rate(self):
-        date = self._context.get('date') or fields.Date.today()
+        date = self._context.get('date') or fields.Date.context_today(self)
         company = self.env['res.company'].browse(self._context.get('company_id')) or self.env.company
         # the subquery selects the last rate before 'date' for the given currency/company
         currency_rates = self._get_rates(company, date)
@@ -110,7 +118,7 @@ class Currency(models.Model):
         integer_value = int(parts[0])
         fractional_value = int(parts[2] or 0)
 
-        lang_code = self.env.context.get('lang') or self.env.user.lang
+        lang_code = self.env.context.get('lang') or self.env.user.lang or get_lang(self.env).code
         lang = self.env['res.lang'].with_context(active_test=False).search([('code', '=', lang_code)])
         amount_words = tools.ustr('{amt_value} {amt_word}').format(
                         amt_value=_num2words(integer_value, lang=lang.iso_code),
@@ -226,6 +234,7 @@ class Currency(models.Model):
                  LIMIT 1) AS date_end
             FROM res_currency_rate r
             JOIN res_company c ON (r.company_id is null or r.company_id = c.id)
+            ORDER BY date_end
         """
 
 
@@ -235,7 +244,7 @@ class CurrencyRate(models.Model):
     _order = "name desc"
 
     name = fields.Date(string='Date', required=True, index=True,
-                           default=lambda self: fields.Date.today())
+                           default=fields.Date.context_today)
     rate = fields.Float(digits=0, default=1.0, help='The rate of the currency to the currency of rate 1')
     currency_id = fields.Many2one('res.currency', string='Currency', readonly=True)
     company_id = fields.Many2one('res.company', string='Company',

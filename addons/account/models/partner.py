@@ -6,8 +6,11 @@ import logging
 
 from odoo import api, fields, models, _
 from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 from odoo.addons.base.models.res_partner import WARNING_MESSAGE, WARNING_HELP
+from psycopg2 import sql, DatabaseError
+
+_logger = logging.getLogger(__name__)
 
 class AccountFiscalPosition(models.Model):
     _name = 'account.fiscal.position'
@@ -41,7 +44,7 @@ class AccountFiscalPosition(models.Model):
     @api.constrains('zip_from', 'zip_to')
     def _check_zip(self):
         for position in self:
-            if self.zip_from and self.zip_to and position.zip_from > position.zip_to:
+            if position.zip_from and position.zip_to and position.zip_from > position.zip_to:
                 raise ValidationError(_('Invalid "Zip Range", please configure it properly.'))
 
     @api.model     # noqa
@@ -50,7 +53,7 @@ class AccountFiscalPosition(models.Model):
         for tax in taxes:
             tax_count = 0
             for t in self.tax_ids:
-                if t.tax_src_id == tax:
+                if t.tax_src_id.id == (tax._origin or tax).id:
                     tax_count += 1
                     if t.tax_dest_id:
                         result |= t.tax_dest_id
@@ -123,7 +126,7 @@ class AccountFiscalPosition(models.Model):
         base_domain = [
             ('auto_apply', '=', True),
             ('vat_required', '=', vat_required),
-            ('company_id', '=', company_id),
+            ('company_id', 'in', [company_id, False]),
         ]
         null_state_dom = state_domain = [('state_ids', '=', False)]
         null_zip_dom = zip_domain = [('zip_from', '=', False), ('zip_to', '=', False)]
@@ -164,11 +167,17 @@ class AccountFiscalPosition(models.Model):
         # This can be easily overridden to apply more complex fiscal rules
         PartnerObj = self.env['res.partner']
         partner = PartnerObj.browse(partner_id)
+        delivery = PartnerObj.browse(delivery_id)
 
-        # if no delivery use invoicing
-        if delivery_id:
-            delivery = PartnerObj.browse(delivery_id)
-        else:
+        company = self.env.company
+        eu_country_codes = set(self.env.ref('base.europe').country_ids.mapped('code'))
+        intra_eu = vat_exclusion = False
+        if company.vat and partner.vat:
+            intra_eu = company.vat[:2] in eu_country_codes and partner.vat[:2] in eu_country_codes
+            vat_exclusion = company.vat[:2] == partner.vat[:2]
+
+        # If company and partner have the same vat prefix (and are both within the EU), use invoicing
+        if not delivery or (intra_eu and vat_exclusion):
             delivery = partner
 
         # partner manually set fiscal position always win
@@ -238,7 +247,7 @@ class ResPartner(models.Model):
                       LEFT JOIN account_account_type act ON (a.user_type_id=act.id)
                       WHERE act.type IN ('receivable','payable')
                       AND account_move_line.partner_id IN %s
-                      AND account_move_line.reconciled IS FALSE
+                      AND account_move_line.reconciled IS NOT TRUE
                       """ + where_clause + """
                       GROUP BY account_move_line.partner_id, act.type
                       """, where_params)
@@ -247,12 +256,14 @@ class ResPartner(models.Model):
             partner = self.browse(pid)
             if type == 'receivable':
                 partner.credit = val
-                partner.debit = False
-                treated |= partner
+                if partner not in treated:
+                    partner.debit = False
+                    treated |= partner
             elif type == 'payable':
                 partner.debit = -val
-                partner.credit = False
-                treated |= partner
+                if partner not in treated:
+                    partner.credit = False
+                    treated |= partner
         remaining = (self - treated)
         remaining.debit = False
         remaining.credit = False
@@ -275,7 +286,7 @@ class ResPartner(models.Model):
               AND NOT acc.deprecated AND acc.company_id = %s
               AND move.state = 'posted'
             GROUP BY partner.id
-            HAVING %s * COALESCE(SUM(aml.amount_residual), 0) ''' + operator + ''' %s''', (account_type, self.env.user.company_id.id, sign, operand))
+            HAVING %s * COALESCE(SUM(aml.amount_residual), 0) ''' + operator + ''' %s''', (account_type, self.env.company.id, sign, operand))
         res = self._cr.fetchall()
         if not res:
             return [('id', '=', '0')]
@@ -425,9 +436,9 @@ class ResPartner(models.Model):
     invoice_warn = fields.Selection(WARNING_MESSAGE, 'Invoice', help=WARNING_HELP, default="no-message")
     invoice_warn_msg = fields.Text('Message for Invoice')
     # Computed fields to order the partners as suppliers/customers according to the
-    # amount of their generated incoming/outgoing account moves 
-    supplier_rank = fields.Integer(default=0)
-    customer_rank = fields.Integer(default=0)
+    # amount of their generated incoming/outgoing account moves
+    supplier_rank = fields.Integer(default=0, copy=False)
+    customer_rank = fields.Integer(default=0, copy=False)
 
     def _get_name_search_order_by_fields(self):
         res = super()._get_name_search_order_by_fields()
@@ -462,16 +473,17 @@ class ResPartner(models.Model):
     def action_view_partner_invoices(self):
         self.ensure_one()
         action = self.env.ref('account.action_move_out_invoice_type').read()[0]
+        all_child = self.with_context(active_test=False).search([('id', 'child_of', self.ids)])
         action['domain'] = [
             ('type', 'in', ('out_invoice', 'out_refund')),
-            ('state', '=', 'posted'),
-            ('partner_id', 'child_of', self.id),
+            ('partner_id', 'in', all_child.ids)
         ]
         action['context'] = {'default_type':'out_invoice', 'type':'out_invoice', 'journal_type': 'sale', 'search_default_unpaid': 1}
         return action
 
-    @api.onchange('company_id')
+    @api.onchange('company_id', 'parent_id')
     def _onchange_company_id(self):
+        super(ResPartner, self)._onchange_company_id()
         if self.company_id:
             company = self.company_id
         else:
@@ -502,3 +514,32 @@ class ResPartner(models.Model):
                 elif is_supplier and 'supplier_rank' not in vals:
                     vals['supplier_rank'] = 1
         return super().create(vals_list)
+
+    def unlink(self):
+        """
+        Prevent the deletion of a partner "Individual", child of a company if:
+        - partner in 'account.move'
+        - state: all states (draft and posted)
+        """
+        moves = self.sudo().env['account.move'].search_count([('partner_id', 'in', self.ids), ('state', 'in', ['draft', 'posted'])])
+        if moves:
+            raise UserError(_("Record cannot be deleted. Partner used in Accounting"))
+        return super(ResPartner, self).unlink()
+
+    def _increase_rank(self, field):
+        if self.ids and field in ['customer_rank', 'supplier_rank']:
+            try:
+                with self.env.cr.savepoint():
+                    query = sql.SQL("""
+                        SELECT {field} FROM res_partner WHERE ID IN %(partner_ids)s FOR UPDATE NOWAIT;
+                        UPDATE res_partner SET {field} = {field} + 1
+                        WHERE id IN %(partner_ids)s
+                    """).format(field=sql.Identifier(field))
+                    self.env.cr.execute(query, {'partner_ids': tuple(self.ids)})
+                    for partner in self:
+                        self.env.cache.remove(partner, partner._fields[field])
+            except DatabaseError as e:
+                if e.pgcode == '55P03':
+                    _logger.debug('Another transaction already locked partner rows. Cannot update partner ranks.')
+                else:
+                    raise e

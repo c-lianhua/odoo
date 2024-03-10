@@ -7,7 +7,7 @@ import io
 import odoo
 from odoo.tests import common, tagged
 from odoo.tools.misc import file_open, mute_logger
-from odoo.tools.translate import _, _lt
+from odoo.tools.translate import _, _lt, TranslationFileReader
 
 
 TRANSLATED_TERM = _lt("Klingon")
@@ -151,7 +151,7 @@ class TestTermCount(common.TransactionCase):
     def test_import_from_po_file(self):
         """Test the import from a single po file works"""
         with file_open('test_translation_import/i18n/tlh.po', 'rb') as f:
-            po_file = base64.encodestring(f.read())
+            po_file = base64.encodebytes(f.read())
 
         import_tlh = self.env["base.language.import"].create({
             'name': 'Klingon',
@@ -174,7 +174,7 @@ class TestTermCount(common.TransactionCase):
     def test_lazy_translation(self):
         """Test the import from a single po file works"""
         with file_open('test_translation_import/i18n/tlh.po', 'rb') as f:
-            po_file = base64.encodestring(f.read())
+            po_file = base64.encodebytes(f.read())
 
         import_tlh = self.env["base.language.import"].create({
             'name': 'Klingon',
@@ -197,10 +197,14 @@ class TestTermCount(common.TransactionCase):
         context = {'lang': "tlh"}
         self.assertEqual(str(TRANSLATED_TERM), "tlhIngan", "The lazy code translation was not applied")
 
+        self.assertEqual("Do you speak " + TRANSLATED_TERM, "Do you speak tlhIngan", "str + _lt concatenation failed")
+        self.assertEqual(TRANSLATED_TERM + ", I speak it", "tlhIngan, I speak it", "_lt + str concatenation failed")
+        self.assertEqual(TRANSLATED_TERM + TRANSLATED_TERM, "tlhIngantlhIngan", "_lt + _lt concatenation failed")
+
     def test_import_from_csv_file(self):
         """Test the import from a single CSV file works"""
         with file_open('test_translation_import/i18n/dot.csv', 'rb') as f:
-            po_file = base64.encodestring(f.read())
+            po_file = base64.encodebytes(f.read())
 
         import_tlh = self.env["base.language.import"].create({
             'name': 'Dothraki',
@@ -220,6 +224,48 @@ class TestTermCount(common.TransactionCase):
         self.env.context = dict(self.env.context, lang="dot")
         self.assertEqual(_("Accounting"), "samva", "The code translation was not applied")
 
+    def test_export_pollution(self):
+        """ Test that exporting the translation only exports the translations of the module """
+        with file_open('test_translation_import/i18n/dot.csv', 'rb') as f:
+            csv_file = base64.b64encode(f.read())
+
+        # dot.csv only contains one term
+        import_tlh = self.env["base.language.import"].create({
+            'name': 'Dothraki',
+            'code': 'dot',
+            'data': csv_file,
+            'filename': 'dot.csv',
+        })
+        with mute_logger('odoo.addons.base.models.res_lang'):
+            import_tlh.import_lang()
+
+        # create a translation that has the same src as an existing field but no module
+        # information and a different res_id that the real field
+        # this translation should not be included in the export
+        self.env['ir.translation'].create({
+            'src': '1XBUO5PUYH2RYZSA1FTLRYS8SPCNU1UYXMEYMM25ASV7JC2KTJZQESZYRV9L8CGB',
+            'value': '1XBUO5PUYH2RYZSA1FTLRYS8SPCNU1UYXMEYMM25ASV7JC2KTJZQESZYRV9L8CGB in Dothraki',
+            'type': 'model',
+            'name': 'ir.model.fields,field_description',
+            'res_id': -1,
+            'lang': 'dot',
+        })
+        module = self.env.ref('base.module_test_translation_import')
+        export = self.env["base.language.export"].create({
+            'lang': 'dot',
+            'format': 'po',
+            'modules': [(6, 0, [module.id])]
+        })
+        export.act_getfile()
+        po_file = export.data
+        reader = TranslationFileReader(base64.b64decode(po_file).decode(), fileformat='po')
+        for row in reader:
+            if row['value']:
+                # should contains only one row from the csv, not the manual one
+                self.assertEqual(row['src'], "Accounting")
+                self.assertEqual(row['value'], "samva")
+
+
 @tagged('post_install', '-at_install')
 class TestTranslationFlow(common.TransactionCase):
 
@@ -227,7 +273,7 @@ class TestTranslationFlow(common.TransactionCase):
         """ Ensure export+import gives the same result as loading a language """
         # load language and generate missing terms to create missing empty terms
         with mute_logger('odoo.addons.base.models.ir_translation'):
-            self.env["base.language.install"].create({'lang': 'fr_FR'}).lang_install()
+            self.env["base.language.install"].create({'lang': 'fr_FR', 'overwrite': True}).lang_install()
         self.env["base.update.translations"].create({'lang': 'fr_FR'}).act_update()
 
         translations = self.env["ir.translation"].search([
@@ -266,3 +312,32 @@ class TestTranslationFlow(common.TransactionCase):
             ('module', '=', 'test_translation_import')
         ])
         self.assertEqual(init_translation_count, len(import_translation))
+
+    def test_export_import_csv(self):
+        """ Ensure can reimport exported csv """
+        self.env.ref("base.lang_fr").active = True
+
+        module = self.env.ref('base.module_test_translation_import')
+        export = self.env["base.language.export"].create({
+            'lang': 'fr_FR',
+            'format': 'csv',
+            'modules': [(6, 0, [module.id])]
+        })
+        export.act_getfile()
+        po_file = export.data
+        self.assertIsNotNone(po_file)
+
+        self.env["ir.translation"].search([
+            ('lang', '=', 'fr_FR'),
+            ('module', '=', 'test_translation_import')
+        ]).unlink()
+
+        import_fr = self.env["base.language.import"].create({
+            'name': 'French',
+            'code': 'fr_FR',
+            'data': export.data,
+            'filename': export.name,
+            'overwrite': False,
+        })
+        with mute_logger('odoo.addons.base.models.res_lang'):
+            import_fr.with_context(create_empty_translation=True).import_lang()

@@ -11,7 +11,7 @@ class TestUBL(common.TransactionCase):
         self.env.user.company_id = self.env['res.company'].create({'name': 'MyCompany'})
         self.env.user.company_id.country = self.env.ref('base.be')
         self.env.ref('l10n_be.l10nbe_chart_template').try_loading()
-        self.partner_id = self.env['res.partner'].create({'name': 'TestUser', 'vat': 'BE0123456789'})
+        self.partner_id = self.env['res.partner'].create({'name': 'TestUser', 'vat': 'BE0477472701'})
 
     def test_ubl_invoice_import(self):
         xml_file_path = get_module_resource('l10n_be_edi', 'test_xml_file', 'efff_test.xml')
@@ -20,7 +20,7 @@ class TestUBL(common.TransactionCase):
 
         attachment_id = self.env['ir.attachment'].create({
             'name': 'efff_test.xml',
-            'datas': base64.encodestring(xml_file),
+            'datas': base64.encodebytes(xml_file),
             'res_id': invoice.id,
             'res_model': 'account.move',
         })

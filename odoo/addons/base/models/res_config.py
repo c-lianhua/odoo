@@ -576,7 +576,7 @@ class ResConfigSettings(models.TransientModel, ResConfigModuleInstallationMixin)
                     groups.write({'implied_ids': [(4, implied_group.id)]})
                 else:
                     groups.write({'implied_ids': [(3, implied_group.id)]})
-                    implied_group.write({'users': [(3, user.id) for user in groups.users]})
+                    implied_group.sudo().write({'users': [(5,)]})
 
         # config fields: store ir.config_parameters
         IrConfigParameter = self.env['ir.config_parameter'].sudo()
@@ -627,10 +627,9 @@ class ResConfigSettings(models.TransientModel, ResConfigModuleInstallationMixin)
         if to_uninstall_modules:
             to_uninstall_modules.button_immediate_uninstall()
 
-        self._install_modules(to_install)
+        result = self._install_modules(to_install)
 
-
-        if to_install or to_uninstall_modules:
+        if result or to_uninstall_modules:
             # After the uninstall/install calls, the registry and environments
             # are no longer valid. So we reset the environment.
             self.env.reset()

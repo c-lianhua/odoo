@@ -126,7 +126,7 @@ var RenameConversationDialog = Dialog.extend({
         this._callback = callback;
 
         this._super(parent, {
-            title: 'Rename conversation',
+            title: _t('Rename conversation'),
             size: 'medium',
             buttons: [{
                 text: _t("Rename"),
@@ -653,20 +653,21 @@ var Discuss = AbstractAction.extend({
         if (type === 'multi_user_channel') {
             $input.autocomplete({
                 autoFocus: true,
+                classes: { 'ui-autocomplete': 'o_mail_channel' },
                 source: function (request, response) {
-                    self._lastSearchVal = _.escape(request.term);
+                    self._lastSearchVal = request.term;
                     self._searchChannel(self._lastSearchVal).then(function (result){
                         result.push({
                             label:  _.str.sprintf(
                                         '<strong>' + _t("Create %s (Public)") + '</strong>',
-                                        '<em>"#' + self._lastSearchVal + '"</em>'
+                                        '<em>"#' + _.escape(self._lastSearchVal) + '"</em>'
                             ),
                             value: self._lastSearchVal,
                             special: 'public',
                         }, {
                             label:  _.str.sprintf(
                                         '<strong>' + _t("Create %s (Private)") + '</strong>',
-                                        '<em>"#' + self._lastSearchVal + '"</em>'
+                                        '<em>"#' + _.escape(self._lastSearchVal) + '"</em>'
                             ),
                             value: self._lastSearchVal,
                             special: 'private',
@@ -678,7 +679,7 @@ var Discuss = AbstractAction.extend({
                     if (self._lastSearchVal) {
                         if (ui.item.special) {
                             if (ui.item.special === 'public') {
-                                self.call('mail_service', 'createChannel', self._lastSearchVal, 'public');
+                                self.call('mail_service', 'createChannel', self._lastSearchVal, 'groups');
                             } else {
                                 self.call('mail_service', 'createChannel', self._lastSearchVal, 'private');
                             }
@@ -696,8 +697,8 @@ var Discuss = AbstractAction.extend({
             $input.autocomplete({
                 autoFocus: true,
                 source: function (request, response) {
-                    self._lastSearchVal = _.escape(request.term);
-                    self.call('mail_service', 'searchPartner', self._lastSearchVal, 10).then(response);
+                    self._lastSearchVal = request.term;
+                    self.call('mail_service', 'searchPartner', _.escape(self._lastSearchVal), 10).then(response);
                 },
                 select: function (ev, ui) {
                     var partnerID = ui.item.id;
@@ -1337,7 +1338,7 @@ var Discuss = AbstractAction.extend({
      * @private
      */
     _onInviteButtonClicked: function () {
-        var title = _.str.sprintf(_t("Invite people to #%s"), this._thread.getName());
+        var title = _.str.sprintf(_t("Invite people to #%s"), _.escape(this._thread.getName()));
         new PartnerInviteDialog(this, title, this._thread.getID()).open();
     },
     /**
@@ -1482,9 +1483,8 @@ var Discuss = AbstractAction.extend({
     /**
      * @private
      * @param {Object} messageData
-     * @param {Function} callback
      */
-    _onPostMessage: function (messageData, callback) {
+    _onPostMessage: function (messageData) {
         var self = this;
         var options = {};
         if (this._selectedMessage) {
@@ -1505,7 +1505,6 @@ var Discuss = AbstractAction.extend({
                 } else {
                     self._threadWidget.scrollToBottom();
                 }
-                callback();
             });
     },
     /**

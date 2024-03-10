@@ -3,6 +3,7 @@
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from odoo.osv.expression import TERM_OPERATORS_NEGATION
 from odoo.tools import ormcache
 
 TYPE2FIELD = {
@@ -202,12 +203,11 @@ class Property(models.Model):
         return self.browse(())
 
     def _get_domain(self, prop_name, model):
-        self._cr.execute("SELECT id FROM ir_model_fields WHERE name=%s AND model=%s", (prop_name, model))
-        res = self._cr.fetchone()
-        if not res:
+        field_id = self.env['ir.model.fields']._get_id(model, prop_name)
+        if not field_id:
             return None
         company_id = self._context.get('force_company') or self.env.company.id
-        return [('fields_id', '=', res[0]), ('company_id', 'in', [company_id, False])]
+        return [('fields_id', '=', field_id), ('company_id', 'in', [company_id, False])]
 
     @api.model
     def get_multi(self, name, model, ids):
@@ -219,7 +219,7 @@ class Property(models.Model):
             return {}
 
         field = self.env[model]._fields[name]
-        field_id = self.env['ir.model.fields']._get(model, name).id
+        field_id = self.env['ir.model.fields']._get_id(model, name)
         company_id = (
             self._context.get('force_company')
             or self.env.company.id
@@ -269,11 +269,12 @@ class Property(models.Model):
             cr.execute(query, params + [sub_refs])
             result.update(cr.fetchall())
 
-        # remove default value, add missing values, and format them
-        default = result.pop(None, None)
-        for id in ids:
-            result[id] = clean(result.get(id, default))
-        return result
+        # determine all values and format them
+        default = result.get(None, None)
+        return {
+            id: clean(result.get(id, default))
+            for id in ids
+        }
 
     @api.model
     def set_multi(self, name, model, values, default_value=None):
@@ -300,8 +301,7 @@ class Property(models.Model):
             default_value = clean(self.get(name, model))
 
         # retrieve the properties corresponding to the given record ids
-        self._cr.execute("SELECT id FROM ir_model_fields WHERE name=%s AND model=%s", (name, model))
-        field_id = self._cr.fetchone()[0]
+        field_id = self.env['ir.model.fields']._get_id(model, name)
         company_id = self.env.context.get('force_company') or self.env.company.id
         refs = {('%s,%s' % (model, id)): id for id in values}
         props = self.search([
@@ -342,49 +342,61 @@ class Property(models.Model):
     def search_multi(self, name, model, operator, value):
         """ Return a domain for the records that match the given condition. """
         default_matches = False
-        include_zero = False
+        negate = False
+
+        # For "is set" and "is not set", same logic for all types
+        if operator == 'in' and False in value:
+            operator = 'not in'
+            negate = True
+        elif operator == 'not in' and False not in value:
+            operator = 'in'
+            negate = True
+        elif operator in ('!=', 'not like', 'not ilike') and value:
+            operator = TERM_OPERATORS_NEGATION[operator]
+            negate = True
+        elif operator == '=' and not value:
+            operator = '!='
+            negate = True
 
         field = self.env[model]._fields[name]
+
         if field.type == 'many2one':
-            comodel = field.comodel_name
             def makeref(value):
-                return value and '%s,%s' % (comodel, value)
-            if operator == "=":
-                value = makeref(value)
-                # if searching properties not set, search those not in those set
-                if value is False:
-                    default_matches = True
-            elif operator in ('!=', '<=', '<', '>', '>='):
+                return value and f'{field.comodel_name},{value}'
+
+            if operator in ('=', '!=', '<=', '<', '>', '>='):
                 value = makeref(value)
             elif operator in ('in', 'not in'):
                 value = [makeref(v) for v in value]
             elif operator in ('=like', '=ilike', 'like', 'not like', 'ilike', 'not ilike'):
                 # most probably inefficient... but correct
-                target = self.env[comodel]
+                target = self.env[field.comodel_name]
                 target_names = target.name_search(value, operator=operator, limit=None)
                 target_ids = [n[0] for n in target_names]
                 operator, value = 'in', [makeref(v) for v in target_ids]
+
         elif field.type in ('integer', 'float'):
             # No record is created in ir.property if the field's type is float or integer with a value
             # equal to 0. Then to match with the records that are linked to a property field equal to 0,
             # the negation of the operator must be taken  to compute the goods and the domain returned
             # to match the searched records is just the opposite.
-            if value == 0 and operator == '=':
-                operator = '!='
-                include_zero = True
-            elif value <= 0 and operator == '>=':
+            value = float(value) if field.type == 'float' else int(value)
+            if operator == '>=' and value <= 0:
                 operator = '<'
-                include_zero = True
-            elif value < 0 and operator == '>':
+                negate = True
+            elif operator == '>' and value < 0:
                 operator = '<='
-                include_zero = True
-            elif value >= 0 and operator == '<=':
+                negate = True
+            elif operator == '<=' and value >= 0:
                 operator = '>'
-                include_zero = True
-            elif value > 0 and operator == '<':
+                negate = True
+            elif operator == '<' and value > 0:
                 operator = '>='
-                include_zero = True
+                negate = True
 
+        elif field.type == 'boolean':
+            # the value must be mapped to an integer value
+            value = int(value)
 
         # retrieve the properties that match the condition
         domain = self._get_domain(name, model)
@@ -396,21 +408,21 @@ class Property(models.Model):
         good_ids = []
         for prop in props:
             if prop.res_id:
-                res_model, res_id = prop.res_id.split(',')
+                __, res_id = prop.res_id.split(',')
                 good_ids.append(int(res_id))
             else:
                 default_matches = True
 
-        if include_zero:
-            return [('id', 'not in', good_ids)]
-        elif default_matches:
+        if default_matches:
             # exclude all records with a property that does not match
-            all_ids = []
             props = self.search(domain + [('res_id', '!=', False)])
-            for prop in props:
-                res_model, res_id = prop.res_id.split(',')
-                all_ids.append(int(res_id))
-            bad_ids = list(set(all_ids) - set(good_ids))
-            return [('id', 'not in', bad_ids)]
+            all_ids = {int(res_id.split(',')[1]) for res_id in props.mapped('res_id')}
+            bad_ids = list(all_ids - set(good_ids))
+            if negate:
+                return [('id', 'in', bad_ids)]
+            else:
+                return [('id', 'not in', bad_ids)]
+        elif negate:
+            return [('id', 'not in', good_ids)]
         else:
             return [('id', 'in', good_ids)]

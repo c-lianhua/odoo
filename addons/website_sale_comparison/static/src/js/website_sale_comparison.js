@@ -105,7 +105,7 @@ var ProductComparison = publicWidget.Widget.extend(VariantMixin, {
                 $elem.closest('form').find('.product_template_id').val(),
                 false
             ).then(function (productId) {
-                productId = parseInt(productId, 10);
+                productId = parseInt(productId, 10) || parseInt($elem.data('product-product-id'), 10);
                 if (!productId) {
                     return;
                 }
@@ -145,6 +145,13 @@ var ProductComparison = publicWidget.Widget.extend(VariantMixin, {
             _.each(data, function (product) {
                 self.product_data[product.product.id] = product;
             });
+            if (product_ids.length > Object.keys(data).length) {
+                /* If some products have been archived
+                they are not displayed but the count & cookie
+                need to be updated.
+                */
+                self._updateCookie();
+            }
         });
     },
     /**
@@ -182,8 +189,12 @@ var ProductComparison = publicWidget.Widget.extend(VariantMixin, {
         var self = this;
         this.$('.o_comparelist_products .o_product_row').remove();
         _.each(this.comparelist_product_ids, function (res) {
-            var $template = self.product_data[res].render;
-            self.$('.o_comparelist_products').append($template);
+            if (self.product_data.hasOwnProperty(res)) {
+                // It is possible that we do not have the required product_data for all IDs in
+                // comparelist_product_ids
+                var $template = self.product_data[res].render;
+                self.$('.o_comparelist_products').append($template);
+            }
         });
         if (force !== 'hide' && (this.comparelist_product_ids.length > 1 || force === 'show')) {
             $('#comparelist .o_product_panel_header').popover('show');

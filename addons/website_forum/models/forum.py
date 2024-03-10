@@ -159,7 +159,7 @@ class Forum(models.Model):
             self.env['forum.post'].with_context(active_test=False).search([('forum_id', 'in', self.ids)]).write({'active': vals['active']})
         return res
 
-    @api.model
+    @api.model  # TODO: Remove me, this is not an `api.model` method
     def _tag_to_write_vals(self, tags=''):
         Tag = self.env['forum.tag']
         post_tags = []
@@ -168,7 +168,7 @@ class Forum(models.Model):
         for tag in (tag for tag in tags.split(',') if tag):
             if tag.startswith('_'):  # it's a new tag
                 # check that not already created meanwhile or maybe excluded by the limit on the search
-                tag_ids = Tag.search([('name', '=', tag[1:])])
+                tag_ids = Tag.search([('name', '=', tag[1:]), ('forum_id', '=', self.id)])
                 if tag_ids:
                     existing_keep.append(int(tag_ids[0]))
                 else:
@@ -401,7 +401,7 @@ class Post(models.Model):
                 match = re.escape(match)  # replace parenthesis or special char in regex
                 content = re.sub(match, match[:3] + 'rel="nofollow" ' + match[3:], content)
 
-        if self.env.user.karma <= forum.karma_editor:
+        if self.env.user.karma < forum.karma_editor:
             filter_regexp = r'(<img.*?>)|(<a[^>]*?href[^>]*?>)|(<[a-z|A-Z]+[^>]*style\s*=\s*[\'"][^\'"]*\s*background[^:]*:[^url;]*url)'
             content_match = re.search(filter_regexp, content, re.I)
             if content_match:
@@ -511,7 +511,7 @@ class Post(models.Model):
 
     def post_notification(self):
         for post in self:
-            tag_partners = post.tag_ids.mapped('message_partner_ids')
+            tag_partners = post.tag_ids.sudo().mapped('message_partner_ids')
 
             if post.state == 'active' and post.parent_id:
                 post.parent_id.message_post_with_view(
@@ -720,7 +720,8 @@ class Post(models.Model):
             'subtype': 'mail.mt_comment',
             'date': self.create_date,
         }
-        new_message = question.with_context(mail_create_nosubscribe=True).message_post(**values)
+        # done with the author user to have create_uid correctly set
+        new_message = question.with_user(self_sudo.create_uid.id).with_context(mail_create_nosubscribe=True).sudo().message_post(**values).sudo(False)
 
         # unlink the original answer, using SUPERUSER_ID to avoid karma issues
         self.sudo().unlink()
@@ -761,9 +762,10 @@ class Post(models.Model):
             'forum_id': question.forum_id.id,
             'content': comment.body,
             'parent_id': question.id,
+            'name': _('Re: %s') % (question.name or ''),
         }
         # done with the author user to have create_uid correctly set
-        new_post = self.with_user(post_create_uid).create(post_values)
+        new_post = self.with_user(post_create_uid).sudo().create(post_values).sudo(False)
 
         # delete comment
         comment.unlink()
@@ -804,9 +806,9 @@ class Post(models.Model):
             'res_id': self.id,
         }
 
-    def _notify_get_groups(self):
+    def _notify_get_groups(self, msg_vals=None):
         """ Add access button to everyone if the document is active. """
-        groups = super(Post, self)._notify_get_groups()
+        groups = super(Post, self)._notify_get_groups(msg_vals=msg_vals)
 
         if self.state == 'active':
             for group_name, group_method, group_data in groups:
